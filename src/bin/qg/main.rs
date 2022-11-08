@@ -1,8 +1,8 @@
 use clap::{Parser};
 use crossbeam_channel;
-use env_logger;
 use ignore;
-use log::{warn};
+use tracing::{Level, warn};
+use tracing_subscriber::FmtSubscriber;
 use std::path::{PathBuf};
 use std::thread;
 
@@ -110,11 +110,16 @@ fn print_match(fmt_opts : &FormatOptions, sf : &SourceFile, qr : &QueryResult) {
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();
 
+    // Set up logging
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::TRACE)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("setting default subscriber failed");
+
     let fmt_opts = FormatOptions {
         number_lines: args.number_lines
     };
-
-    env_logger::init();
 
     let cwd = std::env::current_dir()?;
     let root_dir = args.root.unwrap_or(cwd);
