@@ -72,8 +72,12 @@ impl Statistics {
     }
 }
 
+struct FormatOptions {
+    number_lines : bool
+}
+
 /// Print this result to the console
-fn print_match(sf : &SourceFile, qr : &QueryResult) {
+fn print_match(fmt_opts : &FormatOptions, sf : &SourceFile, qr : &QueryResult) {
     match qr {
         QueryResult::Constant(v) => {
             println!("{}", sf.file_path.display());
@@ -88,7 +92,15 @@ fn print_match(sf : &SourceFile, qr : &QueryResult) {
                     warn!("Error decoding string");
                 },
                 Ok(s) => {
-                    println!("{}", s);
+                    if !fmt_opts.number_lines {
+                        println!("{}", s);
+                    } else {
+                        let mut line_num = rng.start_point.row;
+                        for line in s.lines() {
+                            println!("{} {}", line_num, line);
+                            line_num += 1;
+                        }
+                    }
                 }
             }
         }
@@ -97,6 +109,10 @@ fn print_match(sf : &SourceFile, qr : &QueryResult) {
 
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();
+
+    let fmt_opts = FormatOptions {
+        number_lines: args.number_lines
+    };
 
     env_logger::init();
 
@@ -121,7 +137,7 @@ fn main() -> anyhow::Result<()> {
                     stats.num_files_parsed += 1;
                     stats.num_matches += qr.results.len();
                     for res in qr.results {
-                        print_match(&qr.source_file, &res);
+                        print_match(&fmt_opts, &qr.source_file, &res);
                     }
                 }
             }

@@ -11,4 +11,6 @@ pub struct Cli {
     pub query_path : Option<PathBuf>,
     #[arg(short, long, help = "A directory to search from", value_name = "DIR")]
     pub root : Option<PathBuf>,
+    #[arg(short, long, help = "Prefix each matched line with its line number")]
+    pub number_lines : bool
 }
