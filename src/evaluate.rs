@@ -5,13 +5,15 @@ use crate::query::ir;
 use crate::source_file;
 
 #[derive(Debug)]
-pub enum QueryResult {
+pub enum QueryResult<'a> {
+    /// A constant value that requires no computation
     Constant(ir::QLValue),
-    // FIXME: Make this a slice of the original string with the correct lifetimes
-    Node(String)
+    /// A matched range of code that references the original `source_file::SourceFile`
+    Node(&'a str)
 }
 
-pub fn evaluate_plan(plan : &plan::QueryPlan, target : &source_file::SourceFile) -> anyhow::Result<Vec<QueryResult>> {
+pub fn evaluate_plan<'a>(plan : &plan::QueryPlan, target : &'a source_file::SourceFile) -> anyhow::Result<Vec<QueryResult<'a>>> {
+    // FIXME: Add rich error reporting here, with supportive logging in the main driver that consumes these results
     let mut res = Vec::new();
     match &plan.steps {
         plan::QueryAction::ConstantValue(v) => {

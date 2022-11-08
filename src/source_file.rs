@@ -47,7 +47,10 @@ extern "C" { fn tree_sitter_python() -> tree_sitter::Language; }
 
 pub struct SourceFile {
     /// The AST from the Tree Sitter parser
+    ///
+    /// Note that this contains the `tree_sitter::Language`
     pub ast : tree_sitter::Tree,
+    /// The origianl buffer for the source file
     pub source : String
 }
 
