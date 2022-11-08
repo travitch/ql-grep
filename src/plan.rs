@@ -95,6 +95,14 @@ pub fn build_query_plan(lang : tree_sitter::Language, query : &query::Query) -> 
                     };
                     return Ok(p);
                 },
+                ir::Type::Method => {
+                    let query_string = "(method_declaration) @method.declaration";
+                    let ts_query = tree_sitter::Query::new(lang, query_string)?;
+                    let p = QueryPlan {
+                        steps: QueryAction::TSQuery(ts_query)
+                    };
+                    return Ok(p);
+                },
                 _ => {
                     return Err(anyhow::anyhow!(PlanError::UnsupportedSelectType(*ty)));
                 }
