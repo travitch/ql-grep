@@ -9,9 +9,7 @@ pub enum QueryResult {
     /// A constant value that requires no computation
     Constant(ir::QLValue),
     /// A matched range of code that references the original `source_file::SourceFile`
-    ///
-    /// FIXME: Store a Range instead; use a phantom type to associate this with the corresponding SourceFile
-    Node(tree_sitter::Range)
+     Node(tree_sitter::Range)
 }
 
 /// A container for a list of query results with the source file that gave rise to them
