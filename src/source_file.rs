@@ -50,8 +50,10 @@ pub struct SourceFile {
     ///
     /// Note that this contains the `tree_sitter::Language`
     pub ast : tree_sitter::Tree,
-    /// The origianl buffer for the source file
-    pub source : String
+    /// The original buffer for the source file
+    pub source : String,
+    /// The path on disk for the file; used for reporting
+    pub file_path : PathBuf
 }
 
 impl SourceFile {
@@ -67,7 +69,8 @@ impl SourceFile {
         let t = parser.parse(&bytes, None).ok_or(anyhow!(SourceError::ParseError(path.into())))?;
         let sf = SourceFile {
             ast: t,
-            source: bytes
+            source: bytes,
+            file_path: path.into()
         };
         Ok(sf)
     }

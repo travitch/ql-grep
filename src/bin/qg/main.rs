@@ -9,10 +9,12 @@ use std::thread;
 use ql_grep::query::{Query, parse_query};
 use ql_grep::source_file::SourceFile;
 use ql_grep::plan::build_query_plan;
-use ql_grep::evaluate::evaluate_plan;
+use ql_grep::evaluate::{QueryResult, QueryResults, evaluate_plan};
 
 mod cli;
 
+/// Parse a query provided as either a literal string or a path to a file on
+/// disk
 fn make_query(query_string : &Option<String>, query_path : &Option<PathBuf>) -> anyhow::Result<Query> {
     match query_string {
         Some(s) => {
@@ -33,7 +35,7 @@ fn make_query(query_string : &Option<String>, query_path : &Option<PathBuf>) -> 
 }
 
 fn visit_file(query : &Query,
-              send : crossbeam_channel::Sender<usize>,
+              send : crossbeam_channel::Sender<QueryResults>,
               ent : Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
     match ent {
         Err(err) => {
@@ -46,14 +48,51 @@ fn visit_file(query : &Query,
                 },
                 Ok(sf) => {
                     let query_plan = build_query_plan(sf.ast.language(), query).unwrap();
-                    let result = evaluate_plan(&query_plan, &sf).unwrap();
-                    println!("Result: {:?}", result);
-                    let _ = send.send(1);
+                    let result = evaluate_plan(&query_plan, sf).unwrap();
+                    // Send the result to the aggregator thread
+                    let _ = send.send(result);
                 }
             }
         }
     }
     ignore::WalkState::Continue
+}
+
+struct Statistics {
+    num_files_parsed : usize,
+    num_matches : usize
+}
+
+impl Statistics {
+    fn new() -> Self {
+        Statistics {
+            num_files_parsed: 0,
+            num_matches: 0
+        }
+    }
+}
+
+/// Print this result to the console
+fn print_match(sf : &SourceFile, qr : &QueryResult) {
+    match qr {
+        QueryResult::Constant(v) => {
+            println!("{}", sf.file_path.display());
+            println!("  {:?}", v);
+        },
+        QueryResult::Node(rng) => {
+            println!("{}:{}-{}", sf.file_path.display(), rng.start_point.row, rng.end_point.row);
+            let all_bytes = sf.source.as_bytes();
+            let slice = &all_bytes[rng.start_byte .. rng.end_byte];
+            match std::str::from_utf8(slice) {
+                Err(_) => {
+                    warn!("Error decoding string");
+                },
+                Ok(s) => {
+                    println!("{}", s);
+                }
+            }
+        }
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -67,24 +106,28 @@ fn main() -> anyhow::Result<()> {
     let query = make_query(&args.query_string, &args.query_path)?;
     println!("Query: \n{:?}", query.query_ast.root_node().to_sexp());
 
-    let (send, recv) = crossbeam_channel::bounded(4096);
+    let (send, recv) = crossbeam_channel::bounded::<QueryResults>(4096);
 
     // Spawn a thread to collect all of the intermediate results produced by
     // worker threads
     let accumulator_handle = thread::spawn(move || {
-        let mut num_parsed = 0;
+        let mut stats = Statistics::new();
 
         loop {
             let item = recv.recv();
             match item {
                 Err(_) => { warn!("Exiting accumulator"); break ; },
-                Ok(n) => {
-                    num_parsed += n;
+                Ok(qr) => {
+                    stats.num_files_parsed += 1;
+                    stats.num_matches += qr.results.len();
+                    for res in qr.results {
+                        print_match(&qr.source_file, &res);
+                    }
                 }
             }
         }
 
-        num_parsed
+        stats
     });
 
     ignore::WalkBuilder::new(root_dir)
@@ -104,7 +147,9 @@ fn main() -> anyhow::Result<()> {
             std::panic::resume_unwind(err);
         },
         Ok(result) => {
-            println!("Parsed {} files", result);
+            println!("Summary:");
+            println!("  {} files parsed", result.num_files_parsed);
+            println!("  {} objects matched", result.num_matches);
         }
     }
 
