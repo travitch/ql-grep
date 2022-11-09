@@ -16,26 +16,33 @@ pub enum SourceError {
     ParseError(PathBuf)
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Language {
+    CPP,
+    Java,
+    Python
+}
+
 lazy_static! {
     /// A map of file extensions to their corresponding parsers
-    static ref LANGUAGES: HashMap<OsString, tree_sitter::Language> = {
+    static ref LANGUAGES: HashMap<OsString, (tree_sitter::Language, Language)> = {
         let c_lang = unsafe { tree_sitter_c() };
         let cpp_lang = unsafe { tree_sitter_cpp() };
         let java_lang = unsafe { tree_sitter_java() };
         let python_lang = unsafe { tree_sitter_python() };
 
         let mut m = HashMap::new();
-        m.insert("c".into(), c_lang);
-        m.insert("cpp".into(), cpp_lang);
-        m.insert("cxx".into(), cpp_lang);
-        m.insert("cc".into(), cpp_lang);
-        m.insert("C".into(), cpp_lang);
-        m.insert("hpp".into(), cpp_lang);
-        m.insert("hh".into(), cpp_lang);
-        m.insert("hxx".into(), cpp_lang);
-        m.insert("h".into(), cpp_lang);
-        m.insert("java".into(), java_lang);
-        m.insert("py".into(), python_lang);
+        m.insert("c".into(), (c_lang, Language::CPP));
+        m.insert("cpp".into(), (cpp_lang, Language::CPP));
+        m.insert("cxx".into(), (cpp_lang, Language::CPP));
+        m.insert("cc".into(), (cpp_lang, Language::CPP));
+        m.insert("C".into(), (cpp_lang, Language::CPP));
+        m.insert("hpp".into(), (cpp_lang, Language::CPP));
+        m.insert("hh".into(), (cpp_lang, Language::CPP));
+        m.insert("hxx".into(), (cpp_lang, Language::CPP));
+        m.insert("h".into(), (cpp_lang, Language::CPP));
+        m.insert("java".into(), (java_lang, Language::Java));
+        m.insert("py".into(), (python_lang, Language::Python));
         m
     };
 }
@@ -45,6 +52,7 @@ extern "C" { fn tree_sitter_cpp() -> tree_sitter::Language; }
 extern "C" { fn tree_sitter_java() -> tree_sitter::Language; }
 extern "C" { fn tree_sitter_python() -> tree_sitter::Language; }
 
+
 pub struct SourceFile {
     /// The AST from the Tree Sitter parser
     ///
@@ -53,24 +61,27 @@ pub struct SourceFile {
     /// The original buffer for the source file
     pub source : String,
     /// The path on disk for the file; used for reporting
-    pub file_path : PathBuf
+    pub file_path : PathBuf,
+    /// A reified data value for the language that we can match on later
+    pub lang : Language,
 }
 
 impl SourceFile {
     pub fn new(path : &Path) -> anyhow::Result<Self> {
         let ext = path.extension().ok_or(anyhow!(SourceError::MissingExtension(path.into())))?;
-        let lang = LANGUAGES.get(ext).ok_or(anyhow!(SourceError::UnsupportedFileType(ext.into())))?;
+        let (ts_lang, language) = LANGUAGES.get(ext).ok_or(anyhow!(SourceError::UnsupportedFileType(ext.into())))?;
         let mut parser = tree_sitter::Parser::new();
         // Unwrap is technically unsafe but it is a programming error if this
         // fails (i.e., we haven't set up the tree-sitter parsers correctly)
-        parser.set_language(*lang).unwrap();
+        parser.set_language(*ts_lang).unwrap();
 
         let bytes = std::fs::read_to_string(path)?;
         let t = parser.parse(&bytes, None).ok_or(anyhow!(SourceError::ParseError(path.into())))?;
         let sf = SourceFile {
             ast: t,
             source: bytes,
-            file_path: path.into()
+            file_path: path.into(),
+            lang: *language
         };
         Ok(sf)
     }

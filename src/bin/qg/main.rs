@@ -47,7 +47,7 @@ fn visit_file(query : &Query,
                     warn!("While parsing {}, {}", dir_ent.path().display(), err);
                 },
                 Ok(sf) => {
-                    let query_plan = build_query_plan(sf.ast.language(), query).unwrap();
+                    let query_plan = build_query_plan(&sf, query).unwrap();
                     let result = evaluate_plan(&query_plan, sf).unwrap();
                     // Send the result to the aggregator thread
                     let _ = send.send(result);

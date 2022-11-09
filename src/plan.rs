@@ -1,8 +1,16 @@
-use std::collections::HashMap;
-use tree_sitter;
+pub mod interface;
+mod cpp;
+mod java;
 
+use std::collections::HashMap;
+use tree_sitter::TextProvider;
+
+use crate::plan::interface::TreeInterface;
+use crate::plan::java::JavaTreeInterface;
+use crate::plan::cpp::CPPTreeInterface;
 use crate::query::ir;
 use crate::query;
+use crate::source_file::{Language, SourceFile};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PlanError {
@@ -11,7 +19,11 @@ pub enum PlanError {
     #[error("Unsupported target for a select expression: `{0:?}`")]
     UnsupportedSelectTarget(ir::Expr),
     #[error("Unsupported type for a select expression: `{0:?}`")]
-    UnsupportedSelectType(ir::Type)
+    UnsupportedSelectType(ir::Type),
+    #[error("Unsupported type `{0:?}` for language {1:?}")]
+    UnsupportedTypeForLanguage(ir::Type, Language),
+    #[error("Use of undefined variable `{0}`")]
+    UndeclaredVariable(String)
 }
 
 /// The actions that comprise a query plan
@@ -45,12 +57,20 @@ impl Context {
     }
 }
 
+fn make_tree_interface<'a, 'tree, T : TextProvider<'a>>(file : &'a SourceFile) -> Box<dyn TreeInterface<'a, 'tree, T> + 'a> {
+    match file.lang {
+        Language::CPP => Box::new(CPPTreeInterface::new(file)) as Box<dyn TreeInterface<'a, 'tree, T>>,
+        Language::Java => Box::new(JavaTreeInterface::new(file)) as Box<dyn TreeInterface<'a, 'tree, T>>,
+        Language::Python => unimplemented!()
+    }
+}
+
 /// Build a query plan for the given query in the given language
 ///
 /// Query plans are language-specific (because the Tree Sitter grammar for each
 /// language is fairly different). Note that the caller should cache query plans
 /// to avoid recomputing them.
-pub fn build_query_plan(lang : tree_sitter::Language, query : &query::Query) -> anyhow::Result<QueryPlan> {
+pub fn build_query_plan<'a>(source : &'a SourceFile, query : &query::Query) -> anyhow::Result<QueryPlan> {
     // The basic idea is that we want to do as much processing as we can inside
     // of Tree Sitter's query language, as it will be the most efficient.
     //
@@ -73,6 +93,7 @@ pub fn build_query_plan(lang : tree_sitter::Language, query : &query::Query) -> 
         return Err(anyhow::anyhow!(PlanError::NonSingletonSelect(num_selected)));
     }
 
+    let tree_interface : Box<dyn TreeInterface<'a, 'a, &'a [u8]>> = make_tree_interface(source);
     let ctx = Context::new(&query);
 
 
@@ -84,29 +105,14 @@ pub fn build_query_plan(lang : tree_sitter::Language, query : &query::Query) -> 
             return Ok(p);
         },
         ir::Expr::VarRef(var) => {
-            // FIXME: Return a better error here
-            let ty = ctx.symbol_table.get(var).unwrap();
-            match ty {
-                ir::Type::Function => {
-                    let query_string = "(function_definition) @function.definition";
-                    let ts_query = tree_sitter::Query::new(lang, query_string)?;
-                    let p = QueryPlan {
-                        steps: QueryAction::TSQuery(ts_query)
-                    };
-                    return Ok(p);
-                },
-                ir::Type::Method => {
-                    let query_string = "(method_declaration) @method.declaration";
-                    let ts_query = tree_sitter::Query::new(lang, query_string)?;
-                    let p = QueryPlan {
-                        steps: QueryAction::TSQuery(ts_query)
-                    };
-                    return Ok(p);
-                },
-                _ => {
-                    return Err(anyhow::anyhow!(PlanError::UnsupportedSelectType(*ty)));
-                }
-            }
+            let ty = ctx.symbol_table.get(var).ok_or(anyhow::anyhow!(PlanError::UndeclaredVariable(var.into())))?;
+            let unsupported = PlanError::UnsupportedTypeForLanguage(*ty, source.lang);
+            let top_level = tree_interface.top_level_type(ty).ok_or(anyhow::anyhow!(unsupported))?;
+            let ts_query = tree_sitter::Query::new(source.ast.language(), &top_level.query)?;
+            let p = QueryPlan {
+                steps: QueryAction::TSQuery(ts_query)
+            };
+            return Ok(p);
         },
         unsupported => {
             return Err(anyhow::anyhow!(PlanError::UnsupportedSelectTarget(unsupported.clone())));
