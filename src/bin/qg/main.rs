@@ -2,7 +2,7 @@ use clap::{Parser};
 use crossbeam_channel;
 use ignore;
 use tracing::{Level, info, warn};
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 use std::path::{PathBuf};
 use std::thread;
 
@@ -126,7 +126,8 @@ fn main() -> anyhow::Result<()> {
 
     // Set up logging
     let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::TRACE)
+        .with_max_level(Level::WARN)
+        .with_env_filter(EnvFilter::from_default_env())
         .finish();
     tracing::subscriber::set_global_default(subscriber)
         .expect("setting default subscriber failed");
