@@ -1,15 +1,15 @@
 use clap::{Parser};
 use crossbeam_channel;
 use ignore;
-use tracing::{Level, warn};
+use tracing::{Level, info, warn};
 use tracing_subscriber::FmtSubscriber;
 use std::path::{PathBuf};
 use std::thread;
 
 use ql_grep::query::{Query, parse_query};
 use ql_grep::source_file::SourceFile;
-use ql_grep::plan::build_query_plan;
-use ql_grep::evaluate::{QueryResult, QueryResults, evaluate_plan};
+use ql_grep::plan::{build_query_plan};
+use ql_grep::evaluate::{QueryResult, evaluate_plan};
 
 mod cli;
 
@@ -34,23 +34,37 @@ fn make_query(query_string : &Option<String>, query_path : &Option<PathBuf>) -> 
     }
 }
 
+struct QueryResults {
+    results : Vec<QueryResult>,
+    source_file : SourceFile
+}
+
 fn visit_file(query : &Query,
               send : crossbeam_channel::Sender<QueryResults>,
               ent : Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
     match ent {
         Err(err) => {
-            warn!("While parsing directory entry, `{}`", err);
+            info!("While parsing directory entry, `{}`", err);
         },
         Ok(dir_ent) => {
             match SourceFile::new(dir_ent.path()) {
                 Err(err) => {
-                    warn!("While parsing {}, {}", dir_ent.path().display(), err);
+                    info!("While parsing {}, {}", dir_ent.path().display(), err);
                 },
-                Ok(sf) => {
-                    let query_plan = build_query_plan(&sf, query).unwrap();
-                    let result = evaluate_plan(&query_plan, sf).unwrap();
-                    // Send the result to the aggregator thread
-                    let _ = send.send(result);
+                Ok((sf, ast)) => {
+                    let mut res_storage = Vec::new();
+                    {
+                        let mut cursor = tree_sitter::QueryCursor::new();
+                        let query_plan = build_query_plan(&sf, &ast, query).unwrap();
+                        let mut result = evaluate_plan(&sf, &ast, &mut cursor, &query_plan).unwrap();
+                        res_storage.append(&mut result);
+                    }
+                    // Send the result to the aggregation thread
+                    let qr = QueryResults {
+                        results: res_storage,
+                        source_file: sf
+                    };
+                    let _ = send.send(qr);
                 }
             }
         }
@@ -137,7 +151,7 @@ fn main() -> anyhow::Result<()> {
         loop {
             let item = recv.recv();
             match item {
-                Err(_) => { warn!("Exiting accumulator"); break ; },
+                Err(_) => { break ; },
                 Ok(qr) => {
                     stats.num_files_parsed += 1;
                     stats.num_matches += qr.results.len();

@@ -3,12 +3,11 @@ mod cpp;
 mod java;
 
 use std::collections::HashMap;
-use tree_sitter::TextProvider;
 
-use crate::plan::interface::TreeInterface;
+use crate::plan::interface::{TreeInterface, NodeMatcher};
 use crate::plan::java::JavaTreeInterface;
 use crate::plan::cpp::CPPTreeInterface;
-use crate::query::ir;
+use crate::query::ir::{Expr, Type, QLValue, CompOp, AggregateOp};
 use crate::query;
 use crate::source_file::{Language, SourceFile};
 
@@ -17,21 +16,32 @@ pub enum PlanError {
     #[error("Expected 1 selected expression but found {0}")]
     NonSingletonSelect(usize),
     #[error("Unsupported target for a select expression: `{0:?}`")]
-    UnsupportedSelectTarget(ir::Expr),
+    UnsupportedSelectTarget(Expr),
     #[error("Unsupported type for a select expression: `{0:?}`")]
-    UnsupportedSelectType(ir::Type),
+    UnsupportedSelectType(Type),
     #[error("Unsupported type `{0:?}` for language {1:?}")]
-    UnsupportedTypeForLanguage(ir::Type, Language),
+    UnsupportedTypeForLanguage(Type, Language),
     #[error("Use of undefined variable `{0}`")]
-    UndeclaredVariable(String)
+    UndeclaredVariable(String),
+    #[error("Invalid aggregate `{0:?}` with arity {1}")]
+    InvalidAggregateArity(AggregateOp, usize),
+    #[error("Arguments not supported for this language")]
+    ArgumentsNotSupported
+}
+
+pub enum NodeFilter {
+    Constant(QLValue),
+    Predicate(NodeMatcher<bool>),
+    NumericComputation(NodeMatcher<i32>),
+    NumericComparison(Box<NodeFilter>, CompOp, Box<NodeFilter>)
 }
 
 /// The actions that comprise a query plan
 pub enum QueryAction {
     /// A query that can be evaluated directly by the Tree Sitter engine
-    TSQuery(tree_sitter::Query),
+    TSQuery(Option<NodeFilter>, tree_sitter::Query),
     /// A trivial result that is a constant
-    ConstantValue(ir::QLValue)
+    ConstantValue(QLValue)
 }
 
 /// A query plan that can be evaluated to produce a (stream of) results
@@ -40,7 +50,7 @@ pub struct QueryPlan {
 }
 
 struct Context {
-    symbol_table : HashMap<String, ir::Type>
+    symbol_table : HashMap<String, Type>
 }
 
 impl Context {
@@ -57,11 +67,48 @@ impl Context {
     }
 }
 
-fn make_tree_interface<'a, 'tree, T : TextProvider<'a>>(file : &'a SourceFile) -> Box<dyn TreeInterface<'a, 'tree, T> + 'a> {
+fn make_tree_interface<'a>(file : &'a SourceFile) -> Box<dyn TreeInterface + 'a> {
     match file.lang {
-        Language::CPP => Box::new(CPPTreeInterface::new(file)) as Box<dyn TreeInterface<'a, 'tree, T>>,
-        Language::Java => Box::new(JavaTreeInterface::new(file)) as Box<dyn TreeInterface<'a, 'tree, T>>,
+        Language::CPP => Box::new(CPPTreeInterface::new(file)) as Box<dyn TreeInterface>,
+        Language::Java => Box::new(JavaTreeInterface::new(file)) as Box<dyn TreeInterface>,
         Language::Python => unimplemented!()
+    }
+}
+
+fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr) -> anyhow::Result<NodeFilter> {
+    match e {
+        Expr::ValueExpr(v) => Ok(NodeFilter::Constant(v.clone())),
+        Expr::Comparison(lhs, op, rhs) => {
+            let lhs_f = compile_expr(ti, lhs)?;
+            let rhs_f = compile_expr(ti, rhs)?;
+            Ok(NodeFilter::NumericComparison(Box::new(lhs_f), *op, Box::new(rhs_f)))
+        },
+        Expr::Aggregate(op, exprs) => {
+            if exprs.len() != 1 {
+                return Err(anyhow::anyhow!(PlanError::InvalidAggregateArity(*op, exprs.len())));
+            }
+
+            match (op, &exprs[0].expr) {
+                (AggregateOp::Count, Expr::QualifiedAccess(base, field)) => {
+                    // FIXME: Check that the base is a var ref (and check the type of that variable)
+                    if field == "getAParameter" {
+                        let arg_matcher = ti.callable_arguments().ok_or(PlanError::ArgumentsNotSupported)?;
+                        let arg_count_matcher = NodeMatcher {
+                            query: arg_matcher.query,
+                            extract: Box::new(move |matches, src| (arg_matcher.extract)(matches, src).len() as i32)
+                        };
+                        let flt = NodeFilter::NumericComputation(arg_count_matcher);
+                        return Ok(flt);
+                    }
+
+                    unimplemented!();
+                },
+                _ => {
+                    unimplemented!();
+                }
+            }
+        },
+        _ => unimplemented!()
     }
 }
 
@@ -70,14 +117,16 @@ fn make_tree_interface<'a, 'tree, T : TextProvider<'a>>(file : &'a SourceFile) -
 /// Query plans are language-specific (because the Tree Sitter grammar for each
 /// language is fairly different). Note that the caller should cache query plans
 /// to avoid recomputing them.
-pub fn build_query_plan<'a>(source : &'a SourceFile, query : &query::Query) -> anyhow::Result<QueryPlan> {
+pub fn build_query_plan<'a>(source : &'a SourceFile,
+                            ast : &'a tree_sitter::Tree,
+                            query : &'a query::Query) -> anyhow::Result<QueryPlan> {
     // The basic idea is that we want to do as much processing as we can inside
     // of Tree Sitter's query language, as it will be the most efficient.
     //
     // We will then perform a layer of refined processing to the extent
     // necessary (e.g., applying regex matches to identifier names).
     //
-    // Finally, we will do more advanced program analysis using datalog. The
+    // Finally, we will do more advanced program analysis using catalog. The
     // previous two steps will submit tuples to a Datalog database. The
     // top-level query plan will saturate the tuple store and read out results.
 
@@ -93,24 +142,30 @@ pub fn build_query_plan<'a>(source : &'a SourceFile, query : &query::Query) -> a
         return Err(anyhow::anyhow!(PlanError::NonSingletonSelect(num_selected)));
     }
 
-    let tree_interface : Box<dyn TreeInterface<'a, 'a, &'a [u8]>> = make_tree_interface(source);
+    let tree_interface : Box<dyn TreeInterface> = make_tree_interface(source);
     let ctx = Context::new(&query);
 
-
     match &query.select.select_exprs[0].expr {
-        ir::Expr::ValueExpr(v) => {
+        Expr::ValueExpr(v) => {
             let p = QueryPlan {
                 steps: QueryAction::ConstantValue(v.clone())
             };
             return Ok(p);
         },
-        ir::Expr::VarRef(var) => {
+        Expr::VarRef(var) => {
             let ty = ctx.symbol_table.get(var).ok_or(anyhow::anyhow!(PlanError::UndeclaredVariable(var.into())))?;
             let unsupported = PlanError::UnsupportedTypeForLanguage(*ty, source.lang);
             let top_level = tree_interface.top_level_type(ty).ok_or(anyhow::anyhow!(unsupported))?;
-            let ts_query = tree_sitter::Query::new(source.ast.language(), &top_level.query)?;
+            let ts_query = tree_sitter::Query::new(ast.language(), &top_level.query)?;
+            let flt = match &query.select.where_formula {
+                None => anyhow::Ok(None),
+                Some(w) => {
+                    let flt = compile_expr(&tree_interface, &w)?;
+                    anyhow::Ok(Some(flt))
+                }
+            }?;
             let p = QueryPlan {
-                steps: QueryAction::TSQuery(ts_query)
+                steps: QueryAction::TSQuery(flt, ts_query)
             };
             return Ok(p);
         },

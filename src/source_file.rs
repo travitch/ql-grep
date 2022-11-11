@@ -54,10 +54,6 @@ extern "C" { fn tree_sitter_python() -> tree_sitter::Language; }
 
 
 pub struct SourceFile {
-    /// The AST from the Tree Sitter parser
-    ///
-    /// Note that this contains the `tree_sitter::Language`
-    pub ast : tree_sitter::Tree,
     /// The original buffer for the source file
     pub source : String,
     /// The path on disk for the file; used for reporting
@@ -67,7 +63,7 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    pub fn new(path : &Path) -> anyhow::Result<Self> {
+    pub fn new(path : &Path) -> anyhow::Result<(Self, tree_sitter::Tree)> {
         let ext = path.extension().ok_or(anyhow!(SourceError::MissingExtension(path.into())))?;
         let (ts_lang, language) = LANGUAGES.get(ext).ok_or(anyhow!(SourceError::UnsupportedFileType(ext.into())))?;
         let mut parser = tree_sitter::Parser::new();
@@ -78,11 +74,10 @@ impl SourceFile {
         let bytes = std::fs::read_to_string(path)?;
         let t = parser.parse(&bytes, None).ok_or(anyhow!(SourceError::ParseError(path.into())))?;
         let sf = SourceFile {
-            ast: t,
             source: bytes,
             file_path: path.into(),
             lang: *language
         };
-        Ok(sf)
+        Ok((sf, t))
     }
 }

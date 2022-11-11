@@ -1,4 +1,4 @@
-use tree_sitter::TextProvider;
+use tree_sitter::Node;
 
 use crate::query::ir::Type;
 use crate::plan::interface::*;
@@ -16,7 +16,7 @@ impl<'a> CPPTreeInterface<'a> {
     }
 }
 
-impl<'a, 'tree, T : TextProvider<'a>> TreeInterface<'a, 'tree, T> for CPPTreeInterface<'a> {
+impl<'a> TreeInterface for CPPTreeInterface<'a> {
     fn source(&self) -> &'a SourceFile {
         self.file
     }
@@ -36,8 +36,22 @@ impl<'a, 'tree, T : TextProvider<'a>> TreeInterface<'a, 'tree, T> for CPPTreeInt
     }
 
     fn callable_arguments(&self) ->
-        Option<NodeMatcher<'a, 'tree, T, Vec<FormalArgument<'a>>>>
+        Option<NodeMatcher<Vec<FormalArgument>>>
     {
-        unimplemented!()
+        let matcher = NodeMatcher {
+            query: "(parameter_declaration) @parameter".into(),
+            extract: Box::new(|qms, src| qms.map(|m| parameter_node_to_argument(&m.captures[0].node, src)).collect())
+        };
+        Some(matcher)
+    }
+}
+
+fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgument {
+    // FIXME: Rearrange the types to enable clean error handling (i.e., add a Result to the return)
+    let ident_node = n.child(1).unwrap();
+    let n = ident_node.utf8_text(src).unwrap();
+    FormalArgument {
+        name: n.into(),
+        declared_type: None
     }
 }

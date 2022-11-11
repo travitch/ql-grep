@@ -1,4 +1,4 @@
-use tree_sitter::{Node, QueryMatches, TextProvider};
+use tree_sitter::QueryMatches;
 
 use crate::query::ir::{Type};
 use crate::source_file::SourceFile;
@@ -19,15 +19,17 @@ pub struct TopLevelMatcher {
 ///
 /// For example, a query might select argument nodes and the matcher could
 /// extract a list of argument structures.
-pub struct NodeMatcher<'a, 'tree : 'a, T : TextProvider<'a>, R>
-{
+///
+/// FIXME: Add another field that records ranges to highlight in results (i.e.,
+/// the code that contributes to a Node being included)
+pub struct NodeMatcher<R> {
     pub query : String,
-    pub extract : Box<dyn Fn(QueryMatches<'a, 'tree, T>) -> R>
+    pub extract : Box<dyn for <'a> Fn(QueryMatches<'a, 'a, &'a [u8]>, &'a [u8]) -> R>
 }
 
-pub struct FormalArgument<'a> {
-    pub name : &'a str,
-    pub declared_type : Option<&'a str>
+pub struct FormalArgument {
+    pub name : String,
+    pub declared_type : Option<String>
 }
 
 /// The interface for generating tree matchers for each language
@@ -38,9 +40,9 @@ pub struct FormalArgument<'a> {
 ///
 /// In cases where structure is sufficiently uniform, we should use normal
 /// functions instead.
-pub trait TreeInterface<'a, 'tree, T : TextProvider<'a>> {
+pub trait TreeInterface {
     /// The underlying source file
-    fn source(&self) -> &'a SourceFile;
+    fn source(&self) -> &SourceFile;
 
     /// Return a matcher for a type declared in the From clause of a QL query
     ///
@@ -50,6 +52,5 @@ pub trait TreeInterface<'a, 'tree, T : TextProvider<'a>> {
 
     /// A node matcher that extracts formal arguments from a callable node
     /// (e.g., a method or function)
-    fn callable_arguments(&self) ->
-        Option<NodeMatcher<'a, 'tree, T, Vec<FormalArgument<'a>>>>;
+    fn callable_arguments(&self) -> Option<NodeMatcher<Vec<FormalArgument>>>;
 }

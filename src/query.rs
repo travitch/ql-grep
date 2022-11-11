@@ -6,7 +6,7 @@ pub mod parser;
 
 use tree_sitter;
 
-use crate::query::ir::{AsExpr, Expr, Type, VarDecl, Select, CompOp, QLValue, AggregateOp};
+use crate::query::ir::Select;
 use crate::query::error::QueryError;
 use crate::query::parser::parse_query_ast;
 
