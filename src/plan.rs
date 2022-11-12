@@ -25,8 +25,8 @@ pub enum PlanError {
     UndeclaredVariable(String),
     #[error("Invalid aggregate `{0:?}` with arity {1}")]
     InvalidAggregateArity(AggregateOp, usize),
-    #[error("Arguments not supported for this language")]
-    ArgumentsNotSupported
+    #[error("Querying {0} is not supported in {1} for this language")]
+    NotSupported(String, String)
 }
 
 pub enum NodeFilter {
@@ -35,6 +35,8 @@ pub enum NodeFilter {
     NumericComputation(NodeMatcher<i32>),
     NumericComparison(Box<NodeFilter>, CompOp, Box<NodeFilter>),
     NumericEquality(Box<NodeFilter>, EqualityOp, Box<NodeFilter>),
+    StringComputation(NodeMatcher<String>),
+    StringEquality(Box<NodeFilter>, EqualityOp, Box<NodeFilter>)
 }
 
 pub struct Matching;
@@ -92,9 +94,14 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
             Ok(NodeFilter::NumericComparison(Box::new(lhs_f), *op, Box::new(rhs_f)))
         },
         Expr_::EqualityComparison(lhs, op, rhs) => {
+            assert!(lhs.type_ == rhs.type_);
             let lhs_f = compile_expr(ti, &*lhs)?;
             let rhs_f = compile_expr(ti, &*rhs)?;
-            Ok(NodeFilter::NumericEquality(Box::new(lhs_f), *op, Box::new(rhs_f)))
+            match lhs.type_ {
+                Type::PrimInteger => Ok(NodeFilter::NumericEquality(Box::new(lhs_f), *op, Box::new(rhs_f))),
+                Type::PrimString => Ok(NodeFilter::StringEquality(Box::new(lhs_f), *op, Box::new(rhs_f))),
+                _ => unimplemented!()
+            }
         },
         Expr_::Aggregate(op, exprs) => {
             if exprs.len() != 1 {
@@ -102,14 +109,14 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
             }
 
             match (op, &exprs[0].expr.expr) {
-                (AggregateOp::Count, Expr_::QualifiedAccess(_base, field)) => {
+                (AggregateOp::Count, Expr_::QualifiedAccess(base, field)) => {
                     // The type checker has already verified that the field
                     // access (which is a method call) is valid based on the
                     // supported library methods, so we don't need to
                     // re-validate the receiver object. We will just assume that
                     // the evaluator has suitably handled it.
-                    if field == "getAParameter" {
-                        let arg_matcher = ti.callable_arguments().ok_or(PlanError::ArgumentsNotSupported)?;
+                    if field == "getAParameter" && base.type_.is_callable() {
+                        let arg_matcher = ti.callable_arguments().ok_or(PlanError::NotSupported("arguments".into(), "callable".into()))?;
                         let arg_count_matcher = NodeMatcher {
                             query: arg_matcher.query,
                             extract: Box::new(move |matches, src| (arg_matcher.extract)(matches, src).len() as i32)
@@ -124,6 +131,15 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
                     unimplemented!();
                 }
             }
+        }
+        Expr_::QualifiedAccess(base, method) => {
+            if method == "getName" && base.type_.is_callable() {
+                let name_matcher = ti.callable_name().ok_or(PlanError::NotSupported("names".into(), "callable".into()))?;
+                let flt = NodeFilter::StringComputation(name_matcher);
+                return Ok(flt);
+            }
+
+            unimplemented!()
         },
         _ => unimplemented!()
     }

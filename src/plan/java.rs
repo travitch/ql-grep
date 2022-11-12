@@ -44,6 +44,22 @@ impl<'a> TreeInterface for JavaTreeInterface<'a> {
         };
         Some(matcher)
     }
+
+    fn callable_name(&self) -> Option<NodeMatcher<String>>
+    {
+        let matcher = NodeMatcher {
+            query: "(method_declaration (identifier) @method.name)".into(),
+            extract: Box::new(|mut qms, src| {
+                let m = qms.next().unwrap();
+                callable_name_node_to_string(&m.captures[0].node, src)
+            })
+        };
+        Some(matcher)
+    }
+}
+
+fn callable_name_node_to_string(n : &Node, src : & [u8]) -> String {
+    n.utf8_text(src).unwrap().into()
 }
 
 fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgument {

@@ -53,4 +53,10 @@ pub trait TreeInterface {
     /// A node matcher that extracts formal arguments from a callable node
     /// (e.g., a method or function)
     fn callable_arguments(&self) -> Option<NodeMatcher<Vec<FormalArgument>>>;
+
+    /// A node matcher that extracts the name of a callable node.
+    ///
+    /// This is tailored to just callables because getting the name of other
+    /// types of nodes requires different patterns
+    fn callable_name(&self) -> Option<NodeMatcher<String>>;
 }

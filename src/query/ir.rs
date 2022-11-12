@@ -69,6 +69,21 @@ impl Type {
             _ => None,
         }
     }
+
+    pub fn is_callable(&self) -> bool {
+        match self {
+            Type::Function => true,
+            Type::Method => true,
+            Type::Callable => true,
+            Type::Parameter => false,
+            Type::Field => false,
+            Type::Class => false,
+            Type::Type => false,
+            Type::PrimString => false,
+            Type::PrimInteger => false,
+            Type::PrimBoolean => false
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

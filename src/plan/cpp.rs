@@ -35,8 +35,7 @@ impl<'a> TreeInterface for CPPTreeInterface<'a> {
         }
     }
 
-    fn callable_arguments(&self) ->
-        Option<NodeMatcher<Vec<FormalArgument>>>
+    fn callable_arguments(&self) -> Option<NodeMatcher<Vec<FormalArgument>>>
     {
         let matcher = NodeMatcher {
             query: "(parameter_declaration) @parameter".into(),
@@ -44,6 +43,22 @@ impl<'a> TreeInterface for CPPTreeInterface<'a> {
         };
         Some(matcher)
     }
+
+    fn callable_name(&self) -> Option<NodeMatcher<String>>
+    {
+        let matcher = NodeMatcher {
+            query: "(function_declarator (identifier) @function.name)".into(),
+            extract: Box::new(|mut qms, src| {
+                let m = qms.next().unwrap();
+                callable_name_node_to_string(&m.captures[0].node, src)
+            })
+        };
+        Some(matcher)
+    }
+}
+
+fn callable_name_node_to_string(n : &Node, src : & [u8]) -> String {
+    n.utf8_text(src).unwrap().into()
 }
 
 fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgument {

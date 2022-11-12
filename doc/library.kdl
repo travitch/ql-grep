@@ -18,7 +18,7 @@ type "Function" {
         parameter "index" type="int"
     }
     method "getType" type="Type" status="Unimplemented"
-    method "getName" type="string" status="Unimplemented"
+    method "getName" type="string"
 }
 
 type "Method" {
@@ -28,7 +28,7 @@ type "Method" {
         parameter "index" type="int"
     }
     method "getType" type="Type" status="Unimplemented"
-    method "getName" type="string" status="Unimplemented"
+    method "getName" type="string"
 }
 
 type "Callable" {
@@ -38,7 +38,7 @@ type "Callable" {
         parameter "index" type="int"
     }
     method "getType" type="Type" status="Unimplemented"
-    method "getName" type="string" status="Unimplemented"
+    method "getName" type="string"
 }
 
 type "Parameter" {
