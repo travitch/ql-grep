@@ -42,13 +42,44 @@ pub fn parse_query(text : impl AsRef<[u8]>) -> anyhow::Result<Query<Syntax>> {
     }
 }
 
+// These two helpers are used in the tests and look like dead code when not
+// building test cases.
+
+#[allow(dead_code)]
+fn var_ref(name : &str) -> Expr<Syntax> {
+    untyped(Expr_::VarRef(name.into()))
+}
+
+#[allow(dead_code)]
+fn untyped(e : Expr_<Syntax>) -> Expr<Syntax> {
+    Expr {
+        expr: e,
+        type_: Untyped
+    }
+}
+
+#[allow(dead_code)]
+fn declare(vars : &[(Type, &str)]) -> Vec<VarDecl> {
+    let mut res = Vec::new();
+
+    for (ty, var_name) in vars {
+        let decl = VarDecl {
+            type_: *ty,
+            name: (*var_name).into()
+        };
+        res.push(decl);
+    }
+
+    res
+}
+
 #[test]
 fn select_one_constant() {
     let ql = "select 5";
     let r = parse_query(ql);
     let mut exprs = Vec::new();
     let as_expr = AsExpr {
-        expr: Expr::ValueExpr(QLValue::QLInteger(5)),
+        expr: untyped(Expr_::ConstantExpr(Constant::Integer(5))),
         ident: None
     };
     exprs.push(as_expr);
@@ -66,7 +97,7 @@ fn select_named_constant() {
     let r = parse_query(ql);
     let mut exprs = Vec::new();
     let as_expr = AsExpr {
-        expr: Expr::ValueExpr(QLValue::QLInteger(5)),
+        expr: untyped(Expr_::ConstantExpr(Constant::Integer(5))),
         ident: Some("bar".into())
     };
     exprs.push(as_expr);
@@ -84,11 +115,11 @@ fn select_two_constants() {
     let r = parse_query(ql);
     let mut exprs = Vec::new();
     let as_expr1 = AsExpr {
-        expr: Expr::ValueExpr(QLValue::QLInteger(5)),
+        expr: untyped(Expr_::ConstantExpr(Constant::Integer(5))),
         ident: None
     };
     let as_expr2 = AsExpr {
-        expr: Expr::ValueExpr(QLValue::QLInteger(10)),
+        expr: untyped(Expr_::ConstantExpr(Constant::Integer(10))),
         ident: None
     };
     exprs.push(as_expr1);
@@ -107,26 +138,40 @@ fn select_with_decls() {
     let r = parse_query(ql);
     let mut exprs = Vec::new();
     let as_expr = AsExpr {
-        expr: Expr::VarRef("f".into()),
+        expr: untyped(Expr_::VarRef("f".into())),
         ident: None
     };
     exprs.push(as_expr);
 
-    let mut decls = Vec::new();
-    let function_var = VarDecl {
-        type_: Type::Function,
-        name: "x".into()
-    };
-    let method_var = VarDecl {
-        type_: Type::Method,
-        name: "m".into()
-    };
-    decls.push(function_var);
-    decls.push(method_var);
     let expected = Select {
         select_exprs: exprs,
         where_formula: None,
-        var_decls: decls
+        var_decls: declare(&[(Type::Function, "x"), (Type::Method, "m")])
+    };
+
+    assert_eq!(expected, r.unwrap().select);
+}
+
+#[test]
+fn string_literal() {
+    let ql = "from Method m where m.name() = \"foo\" select m";
+    let r = parse_query(ql);
+
+    let get_name = untyped(Expr_::QualifiedAccess(Box::new(var_ref("m")), "name".into()));
+    let str_lit = untyped(Expr_::ConstantExpr(Constant::String_("foo".into())));
+    let cmp = untyped(Expr_::EqualityComparison(Box::new(get_name), EqualityOp::EQ, Box::new(str_lit)));
+
+    let mut exprs = Vec::new();
+    let as_expr = AsExpr {
+        expr: var_ref("m"),
+        ident: None
+    };
+    exprs.push(as_expr);
+
+    let expected = Select {
+        select_exprs: exprs,
+        where_formula: Some(cmp),
+        var_decls: declare(&[(Type::Method, "m")])
     };
 
     assert_eq!(expected, r.unwrap().select);
@@ -146,20 +191,23 @@ fn select_filter_parameter_count() {
 
     let mut exprs = Vec::new();
     let as_expr = AsExpr {
-        expr: Expr::VarRef("m".into()),
+        expr: untyped(Expr_::VarRef("m".into())),
         ident: None
     };
     exprs.push(as_expr);
 
     let agg_body = AsExpr {
-        expr: Expr::QualifiedAccess(Box::new(Expr::VarRef("m".into())), "getAParameter".into()),
+        expr: Expr {
+            expr: Expr_::QualifiedAccess(Box::new(var_ref("m")), "getAParameter".into()),
+            type_: Untyped
+        },
         ident: None
     };
     let mut agg_exprs = Vec::new();
     agg_exprs.push(agg_body);
-    let lhs = Expr::Aggregate(AggregateOp::Count, agg_exprs);
-    let rhs = Expr::ValueExpr(QLValue::QLInteger(5));
-    let cmp = Expr::Comparison(Box::new(lhs), CompOp::GT, Box::new(rhs));
+    let lhs = untyped(Expr_::Aggregate(AggregateOp::Count, agg_exprs));
+    let rhs = untyped(Expr_::ConstantExpr(Constant::Integer(5)));
+    let cmp = untyped(Expr_::RelationalComparison(Box::new(lhs), CompOp::GT, Box::new(rhs)));
 
     let expected = Select {
         select_exprs: exprs,

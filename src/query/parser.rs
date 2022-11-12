@@ -33,6 +33,14 @@ fn parse_literal<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow:
             let num : i32 = txt.parse()?;
             return Ok(Constant::Integer(num));
         },
+        "string" => {
+            // The range in the AST node includes the quotes, which we need to trim off
+            let txt = node.utf8_text(source)?;
+            let str : String = txt.parse()?;
+            let str1 = str.strip_prefix("\"").unwrap();
+            let str2 = str1.strip_suffix("\"").unwrap();
+            return Ok(Constant::String_(str2.into()));
+        },
         _ => {
             unimplemented!()
         }
