@@ -102,8 +102,12 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
             }
 
             match (op, &exprs[0].expr.expr) {
-                (AggregateOp::Count, Expr_::QualifiedAccess(base, field)) => {
-                    // FIXME: Check that the base is a var ref (and check the type of that variable)
+                (AggregateOp::Count, Expr_::QualifiedAccess(_base, field)) => {
+                    // The type checker has already verified that the field
+                    // access (which is a method call) is valid based on the
+                    // supported library methods, so we don't need to
+                    // re-validate the receiver object. We will just assume that
+                    // the evaluator has suitably handled it.
                     if field == "getAParameter" {
                         let arg_matcher = ti.callable_arguments().ok_or(PlanError::ArgumentsNotSupported)?;
                         let arg_count_matcher = NodeMatcher {
