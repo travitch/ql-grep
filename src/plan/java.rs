@@ -48,10 +48,15 @@ impl<'a> TreeInterface for JavaTreeInterface<'a> {
 
 fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgument {
     // FIXME: Rearrange the types to enable clean error handling (i.e., add a Result to the return)
+    //
+    // It seems like this should be impossible if the parser is correct
     let ident_node = n.child(1).unwrap();
-    let n = ident_node.utf8_text(src).unwrap();
+    let ident = ident_node.utf8_text(src).unwrap();
+
+    let type_node = n.child(0).unwrap();
+    let ty = type_node.utf8_text(src).unwrap();
     FormalArgument {
-        name: n.into(),
-        declared_type: None
+        name: ident.into(),
+        declared_type: Some(ty.into())
     }
 }
