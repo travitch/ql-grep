@@ -22,6 +22,10 @@ pub struct Method {
     pub name: String,
     #[knuffel(property(name="type"))]
     pub type_: String,
+    #[knuffel(property)]
+    pub status: Option<String>,
+    #[knuffel(property)]
+    pub docstring: Option<String>,
     #[knuffel(children(name="parameter"))]
     pub parameters: Vec<Parameter>,
 }

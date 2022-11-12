@@ -9,42 +9,44 @@
 // Primitives are a subset of CodeQL:
 //   - int
 //   - boolean
-//   - float
 //   - string
 
 type "Function" {
-    method "getAParameter" type="Parameter"
-    method "getParameter" type="Parameter" {
+    method "getAParameter" type="Parameter" \
+        docstring=r"Return any parameter in the function signature; this is intended to be used in a relational context."
+    method "getParameter" type="Parameter" status="Unimplemented" {
         parameter "index" type="int"
     }
-    method "getType" type="Type"
-    method "getName" type="string"
+    method "getType" type="Type" status="Unimplemented"
+    method "getName" type="string" status="Unimplemented"
 }
 
 type "Method" {
-    method "getAParameter" type="Parameter"
-    method "getParameter" type="Parameter" {
+    method "getAParameter" type="Parameter" \
+        docstring=r"Return any parameter in the method signature; this is intended to be used in a relational context."
+    method "getParameter" type="Parameter" status="Unimplemented" {
         parameter "index" type="int"
     }
-    method "getType" type="Type"
-    method "getName" type="string"
+    method "getType" type="Type" status="Unimplemented"
+    method "getName" type="string" status="Unimplemented"
 }
 
 type "Callable" {
-    method "getAParameter" type="Parameter"
-    method "getParameter" type="Parameter" {
+    method "getAParameter" type="Parameter" status="Unimplemented" \
+        docstring=r"Return any parameter in signature of the callable; this is intended to be used in a relational context."
+    method "getParameter" type="Parameter" status="Unimplemented" {
         parameter "index" type="int"
     }
-    method "getType" type="Type"
-    method "getName" type="string"
+    method "getType" type="Type" status="Unimplemented"
+    method "getName" type="string" status="Unimplemented"
 }
 
 type "Parameter" {
-    method "getType" type="Type"
-    method "getName" type="string"
-    method "getIndex" type="int"
+    method "getType" type="Type" status="Unimplemented"
+    method "getName" type="string" status="Unimplemented"
+    method "getIndex" type="int" status="Unimplemented"
 }
 
 type "Type" {
-    method "getName" type="string"
+    method "getName" type="string" status="Unimplemented"
 }
