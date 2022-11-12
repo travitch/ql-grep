@@ -9,13 +9,15 @@ use std::thread;
 use ql_grep::query::{Query, parse_query};
 use ql_grep::source_file::SourceFile;
 use ql_grep::plan::{build_query_plan};
+use ql_grep::query::ir::{Typed, Syntax};
+use ql_grep::query::typecheck::typecheck_query;
 use ql_grep::evaluate::{QueryResult, evaluate_plan};
 
 mod cli;
 
 /// Parse a query provided as either a literal string or a path to a file on
 /// disk
-fn make_query(query_string : &Option<String>, query_path : &Option<PathBuf>) -> anyhow::Result<Query> {
+fn make_query(query_string : &Option<String>, query_path : &Option<PathBuf>) -> anyhow::Result<Query<Syntax>> {
     match query_string {
         Some(s) => {
             parse_query(s)
@@ -39,7 +41,7 @@ struct QueryResults {
     source_file : SourceFile
 }
 
-fn visit_file(query : &Query,
+fn visit_file(query : &Query<Typed>,
               send : crossbeam_channel::Sender<QueryResults>,
               ent : Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
     match ent {
@@ -140,7 +142,11 @@ fn main() -> anyhow::Result<()> {
     let root_dir = args.root.unwrap_or(cwd);
 
     let query = make_query(&args.query_string, &args.query_path)?;
-    println!("Query: \n{:?}", query.query_ast.root_node().to_sexp());
+    let typed_select = typecheck_query(query.select)?;
+    let typed_query = Query {
+        query_ast: query.query_ast,
+        select: typed_select
+    };
 
     let (send, recv) = crossbeam_channel::bounded::<QueryResults>(4096);
 
@@ -170,7 +176,7 @@ fn main() -> anyhow::Result<()> {
         .threads(8)
         .build_parallel()
         .run(|| {
-            let q = &query;
+            let q = &typed_query;
             let sender = send.clone();
             Box::new(move |ent| visit_file(q, sender.clone(), ent))
         });

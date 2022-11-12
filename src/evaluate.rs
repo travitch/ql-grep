@@ -1,13 +1,13 @@
 use tree_sitter;
 
 use crate::plan::{NodeFilter, QueryAction, QueryPlan};
-use crate::query::ir::{CompOp, QLValue};
+use crate::query::ir::{EqualityOp, CompOp, Constant};
 use crate::source_file;
 
 #[derive(Debug)]
 pub enum QueryResult {
     /// A constant value that requires no computation
-    Constant(QLValue),
+    Constant(Constant),
     /// A matched range of code that references the original `source_file::SourceFile`
     Node(tree_sitter::Range)
 }
@@ -19,7 +19,7 @@ pub enum QueryResult {
 #[derive(Debug)]
 enum Value {
     /// Embed a constant from the underlying IR
-    Constant(QLValue)
+    Constant(Constant)
 }
 
 /// Returns true if the node passes the filter (or if there is no filter)
@@ -33,29 +33,47 @@ fn evaluate_filter(target : &source_file::SourceFile, flt : &NodeFilter, n : &tr
             let query = tree_sitter::Query::new(n.language(), nm.query.as_ref())?;
             let matches = cur.matches(&query, *n, target.source.as_bytes());
             let b = (nm.extract)(matches, target.source.as_bytes());
-            return Ok(Value::Constant(QLValue::QLBoolean(b)));
+            return Ok(Value::Constant(Constant::Boolean(b)));
         },
         NodeFilter::NumericComputation(nm) => {
             let mut cur = tree_sitter::QueryCursor::new();
             let query = tree_sitter::Query::new(n.language(), nm.query.as_ref())?;
             let matches = cur.matches(&query, *n, target.source.as_bytes());
             let i = (nm.extract)(matches, target.source.as_bytes());
-            return Ok(Value::Constant(QLValue::QLInteger(i)));
+            return Ok(Value::Constant(Constant::Integer(i)));
         },
         NodeFilter::NumericComparison(lhs, op, rhs) => {
             let lhs_e = evaluate_filter(target, lhs, n)?;
             let rhs_e = evaluate_filter(target, rhs, n)?;
             match (&lhs_e, &rhs_e) {
-                (Value::Constant(QLValue::QLInteger(lhs_i)), Value::Constant(QLValue::QLInteger(rhs_i))) => {
+                (Value::Constant(Constant::Integer(lhs_i)), Value::Constant(Constant::Integer(rhs_i))) => {
                     let res = match op {
                         CompOp::LT => lhs_i < rhs_i,
                         CompOp::LE => lhs_i <= rhs_i,
                         CompOp::GT => lhs_i > rhs_i,
                         CompOp::GE => lhs_i >= rhs_i,
-                        CompOp::EQ => lhs_i == rhs_i,
-                        CompOp::NE => lhs_i != rhs_i
+                        // CompOp::EQ => lhs_i == rhs_i,
+                        // CompOp::NE => lhs_i != rhs_i
                     };
-                    return Ok(Value::Constant(QLValue::QLBoolean(res)));
+                    return Ok(Value::Constant(Constant::Boolean(res)));
+                }
+                _ => {
+                    // Also an implementation error, as the query planner should
+                    // render this impossible
+                    panic!("Invalid evaluation results for numeric comparison: {:?} and {:?}", lhs_e, rhs_e);
+                }
+            }
+        },
+        NodeFilter::NumericEquality(lhs, op, rhs) => {
+            let lhs_e = evaluate_filter(target, lhs, n)?;
+            let rhs_e = evaluate_filter(target, rhs, n)?;
+            match (&lhs_e, &rhs_e) {
+                (Value::Constant(Constant::Integer(lhs_i)), Value::Constant(Constant::Integer(rhs_i))) => {
+                    let res = match op {
+                        EqualityOp::EQ => lhs_i == rhs_i,
+                        EqualityOp::NE => lhs_i != rhs_i
+                    };
+                    return Ok(Value::Constant(Constant::Boolean(res)));
                 }
                 _ => {
                     // Also an implementation error, as the query planner should
@@ -85,7 +103,7 @@ pub fn evaluate_plan<'a>(target : &'a source_file::SourceFile,
                         Some(f) => {
                             let res = evaluate_filter(&target, &f, &qm.captures[0].node)?;
                             match res {
-                                Value::Constant(QLValue::QLBoolean(b)) => b,
+                                Value::Constant(Constant::Boolean(b)) => b,
                                 Value::Constant(_) => {
                                     // This is a panic because the query planner
                                     // should have raised a more structured

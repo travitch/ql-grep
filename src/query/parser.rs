@@ -1,6 +1,6 @@
 use tree_sitter;
 
-use crate::query::ir::{AsExpr, Expr, Type, VarDecl, Select, CompOp, QLValue, AggregateOp};
+use crate::query::ir::{Syntax, AsExpr, Expr, Expr_, Type, VarDecl, Select, EqualityOp, CompOp, Constant, AggregateOp, Untyped};
 use crate::query::error::QueryError;
 
 /// Expect a single child node with any type
@@ -26,12 +26,12 @@ fn single_child<'a>(node : tree_sitter::Node<'a>, expected_kind : &'static str) 
     return Err(anyhow::anyhow!(QueryError::MissingExpectedChildNode(node.range(), expected_kind.into())));
 }
 
-fn parse_literal<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<QLValue> {
+fn parse_literal<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<Constant> {
     match node.kind() {
         "integer" => {
             let txt = node.utf8_text(source)?;
             let num : i32 = txt.parse()?;
-            return Ok(QLValue::QLInteger(num));
+            return Ok(Constant::Integer(num));
         },
         _ => {
             unimplemented!()
@@ -39,18 +39,23 @@ fn parse_literal<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow:
     }
 }
 
-fn parse_comp_op<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<CompOp> {
+enum SomeComparison {
+    EqComp(EqualityOp),
+    RelComp(CompOp)
+}
+
+fn parse_comp_op<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<SomeComparison> {
     expect_node_kind(node, "compop")?;
 
     let op_str = node.utf8_text(source)?;
 
     match op_str {
-        "<" => Ok(CompOp::LT),
-        "<=" => Ok(CompOp::LE),
-        ">" => Ok(CompOp::GT),
-        ">=" => Ok(CompOp::GE),
-        "=" => Ok(CompOp::EQ),
-        "!=" => Ok(CompOp::NE),
+        "<" => Ok(SomeComparison::RelComp(CompOp::LT)),
+        "<=" => Ok(SomeComparison::RelComp(CompOp::LE)),
+        ">" => Ok(SomeComparison::RelComp(CompOp::GT)),
+        ">=" => Ok(SomeComparison::RelComp(CompOp::GE)),
+        "=" => Ok(SomeComparison::EqComp(EqualityOp::EQ)),
+        "!=" => Ok(SomeComparison::EqComp(EqualityOp::NE)),
         _ => Err(anyhow::anyhow!(QueryError::InvalidComparisonOp(op_str.into(), node.range())))
     }
 }
@@ -64,17 +69,17 @@ fn parse_aggregate_op<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> an
 }
 
 /// Parse a QL expression from the given node
-fn parse_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<Expr> {
-    match node.kind() {
+fn parse_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<Expr<Syntax>> {
+    let inner_expr = match node.kind() {
         "literal" => {
             let child = any_single_child(node)?;
             let val = parse_literal(child, source)?;
-            return Ok(Expr::ValueExpr(val));
+            Expr_::ConstantExpr(val)
         },
         "variable" => {
             let var_name_node = single_child(node, "varName")?;
             let var_name = parse_var_name(var_name_node, source)?;
-            return Ok(Expr::VarRef(var_name));
+            Expr_::VarRef(var_name)
         },
         "comp_term" => {
             // EXPR COMP_OP EXPR
@@ -85,7 +90,10 @@ fn parse_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Re
             let lhs = parse_expr(node.child(0).unwrap(), source)?;
             let op = parse_comp_op(node.child(1).unwrap(), source)?;
             let rhs = parse_expr(node.child(2).unwrap(), source)?;
-            return Ok(Expr::Comparison(Box::new(lhs), op, Box::new(rhs)));
+            match op {
+                SomeComparison::RelComp(rop) => Expr_::RelationalComparison(Box::new(lhs), rop, Box::new(rhs)),
+                SomeComparison::EqComp(eop) => Expr_::EqualityComparison(Box::new(lhs), eop, Box::new(rhs))
+            }
         },
         "aggregate" => {
             // aggId expr_aggregate_body
@@ -99,7 +107,7 @@ fn parse_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Re
             expect_node_kind(agg_body, "expr_aggregate_body")?;
             let as_exprs_node = single_child(agg_body, "asExprs")?;
             let exprs = parse_as_exprs(as_exprs_node, source)?;
-            return Ok(Expr::Aggregate(op, exprs));
+            Expr_::Aggregate(op, exprs)
         },
         "qualified_expr" => {
             if node.named_child_count() != 2 {
@@ -110,12 +118,17 @@ fn parse_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Re
             expect_node_kind(rhs_node, "qualifiedRhs")?;
             let name_node = single_child(rhs_node, "predicateName")?;
             let pred_name = name_node.utf8_text(source)?;
-            return Ok(Expr::QualifiedAccess(Box::new(expr), pred_name.into()));
+            Expr_::QualifiedAccess(Box::new(expr), pred_name.into())
         },
         _ => {
             panic!("Unsupported expression: {}", node.kind())
         }
-    }
+    };
+
+    Ok(Expr {
+        expr: inner_expr,
+        type_: Untyped
+    })
 }
 
 fn expect_node_kind(node : tree_sitter::Node, kind : &str) -> anyhow::Result<()> {
@@ -134,7 +147,7 @@ fn parse_var_name<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow
     Ok(s.into())
 }
 
-fn parse_as_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<AsExpr> {
+fn parse_as_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<AsExpr<Syntax>> {
     expect_node_kind(node, "asExpr")?;
 
     if node.child_count() == 1 {
@@ -160,7 +173,7 @@ fn parse_as_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow:
 /// Parse an expression like `EXPR as FOO`
 ///
 /// Note that the `as` variants are actually not yet supported
-fn parse_as_exprs<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<Vec<AsExpr>> {
+fn parse_as_exprs<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<Vec<AsExpr<Syntax>>> {
     expect_node_kind(node, "asExprs")?;
 
     let mut res = Vec::new();
@@ -180,13 +193,9 @@ fn parse_type_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyho
     expect_node_kind(node, "typeExpr")?;
     let class_name = single_child(node, "className")?;
     let s = class_name.utf8_text(source)?;
-    match s {
-        "Function" => Ok(Type::Function),
-        "Method" => Ok(Type::Method),
-        "Class" => Ok(Type::Class),
-        "Parameter" => Ok(Type::Parameter),
-        "Field" => Ok(Type::Field),
-        _ => Err(anyhow::anyhow!(QueryError::UnsupportedType(s.into(), node.range())))
+    match Type::from_str(s) {
+        Some(ty) => Ok(ty),
+        None => Err(anyhow::anyhow!(QueryError::UnsupportedType(s.into(), node.range())))
     }
 }
 
@@ -199,8 +208,8 @@ fn parse_var_decl<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow
     let ty = parse_type_expr(node.named_child(0).unwrap(), source)?;
     let var_name = parse_var_name(node.named_child(1).unwrap(), source)?;
     let decl = VarDecl {
+        name: var_name,
         type_: ty,
-        name: var_name
     };
     Ok(decl)
 }
@@ -209,7 +218,7 @@ fn parse_var_decl<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow
 ///
 /// This parser uses simple recursive descent, as Tree Sitter has already
 /// resolved all of the interesting precedence parsing challenges.
-pub fn parse_query_ast(ast : &tree_sitter::Tree, source : impl AsRef<[u8]>) -> anyhow::Result<Select> {
+pub fn parse_query_ast(ast : &tree_sitter::Tree, source : impl AsRef<[u8]>) -> anyhow::Result<Select<Syntax>> {
     println!("Query: \n{:?}", ast.root_node().to_sexp());
     let root = ast.root_node();
     let module_member = single_child(root, "moduleMember")?;

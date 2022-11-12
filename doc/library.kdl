@@ -1,0 +1,50 @@
+// This module defines all of the types and methods available in the ql-grep
+// implementation of CodeQL. The goal is that this file serves as both documentation
+// and as a specification for the type checker in the query parser/planner.
+//
+// Each top-level node encodes the API for a single type
+//
+// Methods with no arguments omit the arguments block
+//
+// Primitives are a subset of CodeQL:
+//   - int
+//   - boolean
+//   - float
+//   - string
+
+type "Function" {
+    method "getAParameter" type="Parameter"
+    method "getParameter" type="Parameter" {
+        parameter "index" type="int"
+    }
+    method "getType" type="Type"
+    method "getName" type="string"
+}
+
+type "Method" {
+    method "getAParameter" type="Parameter"
+    method "getParameter" type="Parameter" {
+        parameter "index" type="int"
+    }
+    method "getType" type="Type"
+    method "getName" type="string"
+}
+
+type "Callable" {
+    method "getAParameter" type="Parameter"
+    method "getParameter" type="Parameter" {
+        parameter "index" type="int"
+    }
+    method "getType" type="Type"
+    method "getName" type="string"
+}
+
+type "Parameter" {
+    method "getType" type="Type"
+    method "getName" type="string"
+    method "getIndex" type="int"
+}
+
+type "Type" {
+    method "getName" type="string"
+}

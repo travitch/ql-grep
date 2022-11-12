@@ -3,22 +3,23 @@
 pub mod error;
 pub mod ir;
 pub mod parser;
+pub mod typecheck;
 
 use tree_sitter;
 
-use crate::query::ir::{Expr, Select, Type, QLValue, AsExpr, VarDecl, AggregateOp, CompOp};
+use crate::query::ir::*;
 use crate::query::error::QueryError;
 use crate::query::parser::parse_query_ast;
 
 /// An abstract representation of queries
-pub struct Query {
+pub struct Query<R: Repr> {
     pub query_ast: tree_sitter::Tree,
-    pub select: Select
+    pub select: Select<R>
 }
 
 extern "C" { fn tree_sitter_ql() -> tree_sitter::Language; }
 
-pub fn parse_query(text : impl AsRef<[u8]>) -> anyhow::Result<Query> {
+pub fn parse_query(text : impl AsRef<[u8]>) -> anyhow::Result<Query<Syntax>> {
     let mut parser = tree_sitter::Parser::new();
 
     // If this fails, it really is a programming error as this parser should be

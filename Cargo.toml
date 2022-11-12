@@ -8,6 +8,7 @@ anyhow = "^1"
 clap = { version = "^4.0", features = ["derive"] }
 crossbeam-channel = "^0.5"
 ignore = "^0.4"
+knuffel = "^2"
 lazy_static = "^1.4"
 tracing = "^0.1"
 tracing-subscriber = { version = "^0.3", features = ["env-filter"]}
