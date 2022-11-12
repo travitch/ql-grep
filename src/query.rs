@@ -6,7 +6,7 @@ pub mod parser;
 
 use tree_sitter;
 
-use crate::query::ir::Select;
+use crate::query::ir::{Expr, Select, Type, QLValue, AsExpr, VarDecl, AggregateOp, CompOp};
 use crate::query::error::QueryError;
 use crate::query::parser::parse_query_ast;
 
@@ -52,7 +52,7 @@ fn select_one_constant() {
     };
     exprs.push(as_expr);
     let expected = Select {
-        select_expr: exprs,
+        select_exprs: exprs,
         where_formula: None,
         var_decls: Vec::new()
     };
@@ -70,7 +70,7 @@ fn select_named_constant() {
     };
     exprs.push(as_expr);
     let expected = Select {
-        select_expr: exprs,
+        select_exprs: exprs,
         where_formula: None,
         var_decls: Vec::new()
     };
@@ -93,7 +93,7 @@ fn select_two_constants() {
     exprs.push(as_expr1);
     exprs.push(as_expr2);
     let expected = Select {
-        select_expr: exprs,
+        select_exprs: exprs,
         where_formula: None,
         var_decls: Vec::new()
     };
@@ -123,7 +123,7 @@ fn select_with_decls() {
     decls.push(function_var);
     decls.push(method_var);
     let expected = Select {
-        select_expr: exprs,
+        select_exprs: exprs,
         where_formula: None,
         var_decls: decls
     };
@@ -161,7 +161,7 @@ fn select_filter_parameter_count() {
     let cmp = Expr::Comparison(Box::new(lhs), CompOp::GT, Box::new(rhs));
 
     let expected = Select {
-        select_expr: exprs,
+        select_exprs: exprs,
         where_formula: Some(cmp),
         var_decls: decls
     };
