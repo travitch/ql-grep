@@ -131,16 +131,18 @@ pub enum AggregateOp {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Expr_<R: Repr> {
+    ConstantExpr(Constant),
+    RelationalComparison(Box<Expr<R>>, CompOp, Box<Expr<R>>),
+    EqualityComparison(Box<Expr<R>>, EqualityOp, Box<Expr<R>>),
+    VarRef(String),
+    LogicalConjunction(Box<Expr<R>>, Box<Expr<R>>),
+    LogicalDisjunction(Box<Expr<R>>, Box<Expr<R>>),
     /// A method called in a base object, with a list of arguments
     QualifiedAccess(Box<Expr<R>>, String, Vec<Expr<R>>),
     // FIXME: Make this explicit and eliminate the aggregate constructor
     //
     // Count(Box<Expr<R>>),
     Aggregate(AggregateOp, Vec<AsExpr<R>>),
-    RelationalComparison(Box<Expr<R>>, CompOp, Box<Expr<R>>),
-    EqualityComparison(Box<Expr<R>>, EqualityOp, Box<Expr<R>>),
-    VarRef(String),
-    ConstantExpr(Constant)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

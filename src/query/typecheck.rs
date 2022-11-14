@@ -20,7 +20,9 @@ pub enum TypecheckError {
     #[error("Non-literal regular expression in call to method `{0}` in operand {1}")]
     NonLiteralRegex(String, usize),
     #[error("Invalid regular expression `{0}`: {1}")]
-    InvalidRegularExpression(String, regex::Error)
+    InvalidRegularExpression(String, regex::Error),
+    #[error("Invalid type for expression `{0:?}`, expected `{1:?}` but found `{2:?}`")]
+    UnexpectedExpressionType(Expr<Syntax>, Type, Type)
 }
 
 struct MethodSignature(String, Vec<Type>, Type);
@@ -192,6 +194,40 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
 
             return Ok(Expr {
                 expr: Expr_::EqualityComparison(Box::new(lhs_ty), *op, Box::new(rhs_ty)),
+                type_: Type::PrimBoolean
+            });
+        },
+        Expr_::LogicalConjunction(lhs, rhs) => {
+            let lhs_ty = typecheck_expr(env, &lhs)?;
+            let rhs_ty = typecheck_expr(env, &rhs)?;
+
+            if lhs_ty.type_ != Type::PrimBoolean {
+                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*lhs.clone(), Type::PrimBoolean, lhs_ty.type_)));
+            }
+
+            if rhs_ty.type_ != Type::PrimBoolean {
+                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*rhs.clone(), Type::PrimBoolean, rhs_ty.type_)));
+            }
+
+            return Ok(Expr {
+                expr: Expr_::LogicalConjunction(Box::new(lhs_ty), Box::new(rhs_ty)),
+                type_: Type::PrimBoolean
+            });
+        },
+        Expr_::LogicalDisjunction(lhs, rhs) => {
+            let lhs_ty = typecheck_expr(env, &lhs)?;
+            let rhs_ty = typecheck_expr(env, &rhs)?;
+
+            if lhs_ty.type_ != Type::PrimBoolean {
+                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*lhs.clone(), Type::PrimBoolean, lhs_ty.type_)));
+            }
+
+            if rhs_ty.type_ != Type::PrimBoolean {
+                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*rhs.clone(), Type::PrimBoolean, rhs_ty.type_)));
+            }
+
+            return Ok(Expr {
+                expr: Expr_::LogicalDisjunction(Box::new(lhs_ty), Box::new(rhs_ty)),
                 type_: Type::PrimBoolean
             });
         },

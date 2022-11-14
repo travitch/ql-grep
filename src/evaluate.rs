@@ -107,6 +107,43 @@ fn evaluate_filter(target : &source_file::SourceFile, flt : &NodeFilter, n : &tr
                 }
             }
         },
+        NodeFilter::LogicalConjunction(lhs, rhs) => {
+            let lhs_e = evaluate_filter(target, lhs, n)?;
+            let rhs_e = evaluate_filter(target, rhs, n)?;
+            match (&lhs_e, &rhs_e) {
+                (Value::Constant(Constant::Boolean(b1)), Value::Constant(Constant::Boolean(b2))) => {
+                    return Ok(Value::Constant(Constant::Boolean(*b1 && *b2)));
+                },
+                _ => {
+                    panic!("Invalid evaluation results for logical conjunction: {:?} and {:?}", lhs_e, rhs_e);
+                }
+            }
+        },
+        NodeFilter::LogicalDisjunction(lhs, rhs) => {
+            let lhs_e = evaluate_filter(target, lhs, n)?;
+            match &lhs_e {
+                Value::Constant(Constant::Boolean(b1)) => {
+                    if *b1 {
+                        return Ok(Value::Constant(Constant::Boolean(true)));
+                    } else {
+                        let rhs_e = evaluate_filter(target, rhs, n)?;
+                        match &rhs_e {
+                            Value::Constant(Constant::Boolean(b2)) => {
+                                return Ok(Value::Constant(Constant::Boolean(*b2)));
+                            },
+                            _ => {
+                                panic!("Invalid evaluation results for boolean disjuction: {:?}", rhs_e);
+                            }
+                        }
+                    }
+                },
+                _ => {
+                    panic!("Invalid evaluation results for boolean disjuction: {:?}", lhs_e);
+                }
+            }
+
+
+        }
     }
 }
 

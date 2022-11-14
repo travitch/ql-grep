@@ -103,6 +103,24 @@ fn parse_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Re
                 SomeComparison::EqComp(eop) => Expr_::EqualityComparison(Box::new(lhs), eop, Box::new(rhs))
             }
         },
+        "conjunction" => {
+            if node.named_child_count() != 2 {
+                return Err(anyhow::anyhow!(QueryError::MalformedNode("conjunction".into(), node.range())));
+            }
+
+            let lhs = parse_expr(node.named_child(0).unwrap(), source)?;
+            let rhs = parse_expr(node.named_child(1).unwrap(), source)?;
+            Expr_::LogicalConjunction(Box::new(lhs), Box::new(rhs))
+        },
+        "disjunction" => {
+            if node.named_child_count() != 2 {
+                return Err(anyhow::anyhow!(QueryError::MalformedNode("disjunction".into(), node.range())));
+            }
+
+            let lhs = parse_expr(node.named_child(0).unwrap(), source)?;
+            let rhs = parse_expr(node.named_child(1).unwrap(), source)?;
+            Expr_::LogicalConjunction(Box::new(lhs), Box::new(rhs))
+        },
         "aggregate" => {
             // aggId expr_aggregate_body
             if node.named_child_count() != 2 {
@@ -266,11 +284,21 @@ pub fn parse_query_ast(ast : &tree_sitter::Tree, source : impl AsRef<[u8]>) -> a
                 let decl = parse_var_decl(child, source.as_ref())?;
                 declared_vars.push(decl);
             },
+            // FIXME: Ensure that there are no others required to handle
+            // decls/select, but just have everything else be a where clause
             "comp_term" => {
                 let e = parse_expr(child, source.as_ref())?;
                 filter = Some(e);
             },
             "qualified_expr" => {
+                let e = parse_expr(child, source.as_ref())?;
+                filter = Some(e);
+            },
+            "conjunction" => {
+                let e = parse_expr(child, source.as_ref())?;
+                filter = Some(e);
+            },
+            "disjunction" => {
                 let e = parse_expr(child, source.as_ref())?;
                 filter = Some(e);
             },

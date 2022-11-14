@@ -36,7 +36,9 @@ pub enum NodeFilter {
     NumericComparison(Box<NodeFilter>, CompOp, Box<NodeFilter>),
     NumericEquality(Box<NodeFilter>, EqualityOp, Box<NodeFilter>),
     StringComputation(NodeMatcher<String>),
-    StringEquality(Box<NodeFilter>, EqualityOp, Box<NodeFilter>)
+    StringEquality(Box<NodeFilter>, EqualityOp, Box<NodeFilter>),
+    LogicalConjunction(Box<NodeFilter>, Box<NodeFilter>),
+    LogicalDisjunction(Box<NodeFilter>, Box<NodeFilter>)
 }
 
 pub struct Matching;
@@ -103,6 +105,18 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
                 _ => unimplemented!()
             }
         },
+        Expr_::LogicalConjunction(lhs, rhs) => {
+            assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
+            let lhs_f = compile_expr(ti, &*lhs)?;
+            let rhs_f = compile_expr(ti, &*rhs)?;
+            Ok(NodeFilter::LogicalConjunction(Box::new(lhs_f), Box::new(rhs_f)))
+        },
+        Expr_::LogicalDisjunction(lhs, rhs) => {
+            assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
+            let lhs_f = compile_expr(ti, &*lhs)?;
+            let rhs_f = compile_expr(ti, &*rhs)?;
+            Ok(NodeFilter::LogicalDisjunction(Box::new(lhs_f), Box::new(rhs_f)))
+        },
         Expr_::Aggregate(op, exprs) => {
             if exprs.len() != 1 {
                 return Err(anyhow::anyhow!(PlanError::InvalidAggregateArity(*op, exprs.len())));
@@ -131,7 +145,7 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
                     unimplemented!();
                 }
             }
-        }
+        },
         Expr_::QualifiedAccess(base, method, operands) => {
             if method == "getName" && base.type_.is_callable() {
                 assert!(operands.is_empty());
