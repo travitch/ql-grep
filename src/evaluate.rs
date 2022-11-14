@@ -22,7 +22,11 @@ enum Value {
     Constant(Constant)
 }
 
-/// Returns true if the node passes the filter (or if there is no filter)
+/// Returns the result of evaluating a node filter on the given node
+///
+/// This is currently set up as a very naive interpreter. In the future, the
+/// query planner could embed some of the numeric and logical computations into
+/// the individual filters to reduce the evaluation cost.
 fn evaluate_filter(target : &source_file::SourceFile, flt : &NodeFilter, n : &tree_sitter::Node) -> anyhow::Result<Value> {
     match flt {
         NodeFilter::Constant(k) => {
@@ -52,8 +56,6 @@ fn evaluate_filter(target : &source_file::SourceFile, flt : &NodeFilter, n : &tr
                         CompOp::LE => lhs_i <= rhs_i,
                         CompOp::GT => lhs_i > rhs_i,
                         CompOp::GE => lhs_i >= rhs_i,
-                        // CompOp::EQ => lhs_i == rhs_i,
-                        // CompOp::NE => lhs_i != rhs_i
                     };
                     return Ok(Value::Constant(Constant::Boolean(res)));
                 }
