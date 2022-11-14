@@ -4,7 +4,7 @@ use crate::query::ir::{Syntax, AsExpr, Expr, Expr_, Type, VarDecl, Select, Equal
 use crate::query::error::QueryError;
 
 /// Expect a single child node with any type
-fn any_single_child<'a>(node : tree_sitter::Node<'a>) -> anyhow::Result<tree_sitter::Node<'a>> {
+fn any_single_child(node : tree_sitter::Node) -> anyhow::Result<tree_sitter::Node> {
     if node.named_child_count() != 1 {
         return Err(anyhow::anyhow!(QueryError::MissingExpectedChildNode(node.range(), "$ANY".into())));
     }
@@ -12,7 +12,7 @@ fn any_single_child<'a>(node : tree_sitter::Node<'a>) -> anyhow::Result<tree_sit
     // Size checked already; the separate check is also to ensure that there is
     // exactly one child
     let child = node.named_child(0).unwrap();
-    return Ok(child);
+    Ok(child)
 }
 
 /// Expect a single child node with the given node kind
@@ -23,7 +23,7 @@ fn single_child<'a>(node : tree_sitter::Node<'a>, expected_kind : &'static str) 
         return Ok(child);
     }
 
-    return Err(anyhow::anyhow!(QueryError::MissingExpectedChildNode(node.range(), expected_kind.into())));
+    Err(anyhow::anyhow!(QueryError::MissingExpectedChildNode(node.range(), expected_kind.into())))
 }
 
 fn parse_literal<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<Constant> {
@@ -31,15 +31,15 @@ fn parse_literal<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow:
         "integer" => {
             let txt = node.utf8_text(source)?;
             let num : i32 = txt.parse()?;
-            return Ok(Constant::Integer(num));
+            Ok(Constant::Integer(num))
         },
         "string" => {
             // The range in the AST node includes the quotes, which we need to trim off
             let txt = node.utf8_text(source)?;
             let str : String = txt.parse()?;
-            let str1 = str.strip_prefix("\"").unwrap();
-            let str2 = str1.strip_suffix("\"").unwrap();
-            return Ok(Constant::String_(str2.into()));
+            let str1 = str.strip_prefix('"').unwrap();
+            let str2 = str1.strip_suffix('"').unwrap();
+            Ok(Constant::String_(str2.into()))
         },
         _ => {
             unimplemented!()
@@ -235,7 +235,7 @@ fn parse_type_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyho
     expect_node_kind(node, "typeExpr")?;
     let class_name = single_child(node, "className")?;
     let s = class_name.utf8_text(source)?;
-    match Type::from_str(s) {
+    match Type::from_string(s) {
         Some(ty) => Ok(ty),
         None => Err(anyhow::anyhow!(QueryError::UnsupportedType(s.into(), node.range())))
     }
@@ -314,5 +314,5 @@ pub fn parse_query_ast(ast : &tree_sitter::Tree, source : impl AsRef<[u8]>) -> a
         var_decls: declared_vars
     };
 
-    return Ok(res);
+    Ok(res)
 }

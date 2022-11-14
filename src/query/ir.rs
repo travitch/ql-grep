@@ -70,7 +70,7 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn from_str(s : &str) -> Option<Type> {
+    pub fn from_string(s : &str) -> Option<Type> {
         match s {
             "Function" => Some(Type::Function),
             "Method" => Some(Type::Method),

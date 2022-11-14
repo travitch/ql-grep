@@ -81,13 +81,13 @@ fn validate_method(seen_types : &HashSet<String>, m : &Method) {
     }
 
     for p in &m.parameters {
-        validate_parameter(seen_types, &m, &p);
+        validate_parameter(seen_types, m, p);
     }
 }
 
 fn validate_type(seen_types : &HashSet<String>, t : &Type) {
     for m in &t.methods {
-        validate_method(seen_types, &m);
+        validate_method(seen_types, m);
     }
 }
 
@@ -108,7 +108,7 @@ fn validate_library(types : &Vec<Type>) {
 
     // Now traverse all of the definitions
     for t in types {
-        validate_type(&seen_types, &t);
+        validate_type(&seen_types, t);
     }
 }
 

@@ -64,15 +64,15 @@ pub struct SourceFile {
 
 impl SourceFile {
     pub fn new(path : &Path) -> anyhow::Result<(Self, tree_sitter::Tree)> {
-        let ext = path.extension().ok_or(anyhow!(SourceError::MissingExtension(path.into())))?;
-        let (ts_lang, language) = LANGUAGES.get(ext).ok_or(anyhow!(SourceError::UnsupportedFileType(ext.into())))?;
+        let ext = path.extension().ok_or_else(|| anyhow!(SourceError::MissingExtension(path.into())))?;
+        let (ts_lang, language) = LANGUAGES.get(ext).ok_or_else(|| anyhow!(SourceError::UnsupportedFileType(ext.into())))?;
         let mut parser = tree_sitter::Parser::new();
         // Unwrap is technically unsafe but it is a programming error if this
         // fails (i.e., we haven't set up the tree-sitter parsers correctly)
         parser.set_language(*ts_lang).unwrap();
 
         let bytes = std::fs::read_to_string(path)?;
-        let t = parser.parse(&bytes, None).ok_or(anyhow!(SourceError::ParseError(path.into())))?;
+        let t = parser.parse(&bytes, None).ok_or_else(|| anyhow!(SourceError::ParseError(path.into())))?;
         let sf = SourceFile {
             source: bytes,
             file_path: path.into(),

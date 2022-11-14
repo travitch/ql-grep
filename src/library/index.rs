@@ -9,9 +9,9 @@ pub struct MethodIndex(pub HashMap<String, MethodSignature>);
 
 fn build_method_signature(method : &library::Method) -> MethodSignature {
     let mut param_types = Vec::new();
-    let ret_ty = Type::from_str(method.type_.as_str()).unwrap();
+    let ret_ty = Type::from_string(method.type_.as_str()).unwrap();
     for p in &method.parameters {
-        param_types.push(Type::from_str(p.type_.as_str()).unwrap());
+        param_types.push(Type::from_string(p.type_.as_str()).unwrap());
     }
 
     MethodSignature(method.name.clone(), param_types, ret_ty, method.status)
@@ -20,7 +20,7 @@ fn build_method_signature(method : &library::Method) -> MethodSignature {
 fn index_library_type(lib_ty : &library::Type) -> MethodIndex {
     let mut res = HashMap::new();
     for m in &lib_ty.methods {
-        let sig = build_method_signature(&m);
+        let sig = build_method_signature(m);
         res.insert(m.name.clone(), sig);
     }
 
@@ -31,9 +31,9 @@ static LIBRARY_INDEX: Lazy<HashMap<Type, MethodIndex>> = Lazy::new(|| {
     let mut ty_idx = HashMap::new();
 
     for ty in library::library_types() {
-        let midx = index_library_type(&ty);
+        let midx = index_library_type(ty);
         println!("indexing {}", ty.name.as_str());
-        let ty = Type::from_str(ty.name.as_str()).unwrap();
+        let ty = Type::from_string(ty.name.as_str()).unwrap();
         ty_idx.insert(ty, midx);
     }
 

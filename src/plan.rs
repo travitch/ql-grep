@@ -84,14 +84,14 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
         Expr_::ConstantExpr(v) => Ok(NodeFilter::Constant(v.clone())),
         Expr_::VarRef(s) => Ok(NodeFilter::VarRef(s.into())),
         Expr_::RelationalComparison(lhs, op, rhs) => {
-            let lhs_f = compile_expr(ti, &*lhs)?;
-            let rhs_f = compile_expr(ti, &*rhs)?;
+            let lhs_f = compile_expr(ti, lhs)?;
+            let rhs_f = compile_expr(ti, rhs)?;
             Ok(NodeFilter::NumericComparison(Box::new(lhs_f), *op, Box::new(rhs_f)))
         },
         Expr_::EqualityComparison(lhs, op, rhs) => {
             assert!(lhs.type_ == rhs.type_);
-            let lhs_f = compile_expr(ti, &*lhs)?;
-            let rhs_f = compile_expr(ti, &*rhs)?;
+            let lhs_f = compile_expr(ti, lhs)?;
+            let rhs_f = compile_expr(ti, rhs)?;
             match lhs.type_ {
                 Type::PrimInteger => Ok(NodeFilter::NumericEquality(Box::new(lhs_f), *op, Box::new(rhs_f))),
                 Type::PrimString => Ok(NodeFilter::StringEquality(Box::new(lhs_f), *op, Box::new(rhs_f))),
@@ -100,14 +100,14 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
         },
         Expr_::LogicalConjunction(lhs, rhs) => {
             assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
-            let lhs_f = compile_expr(ti, &*lhs)?;
-            let rhs_f = compile_expr(ti, &*rhs)?;
+            let lhs_f = compile_expr(ti, lhs)?;
+            let rhs_f = compile_expr(ti, rhs)?;
             Ok(NodeFilter::LogicalConjunction(Box::new(lhs_f), Box::new(rhs_f)))
         },
         Expr_::LogicalDisjunction(lhs, rhs) => {
             assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
-            let lhs_f = compile_expr(ti, &*lhs)?;
-            let rhs_f = compile_expr(ti, &*rhs)?;
+            let lhs_f = compile_expr(ti, lhs)?;
+            let rhs_f = compile_expr(ti, rhs)?;
             Ok(NodeFilter::LogicalDisjunction(Box::new(lhs_f), Box::new(rhs_f)))
         },
         Expr_::Aggregate(op, exprs) => {
@@ -123,7 +123,7 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
                     // re-validate the receiver object. We will just assume that
                     // the evaluator has suitably handled it.
                     if field == "getAParameter" && base.type_.is_callable() {
-                        let arg_matcher = ti.callable_arguments().ok_or(PlanError::NotSupported("arguments".into(), "callable".into()))?;
+                        let arg_matcher = ti.callable_arguments().ok_or_else(|| PlanError::NotSupported("arguments".into(), "callable".into()))?;
                         let arg_count_matcher = NodeMatcher {
                             query: arg_matcher.query,
                             extract: Box::new(move |matches, src| (arg_matcher.extract)(matches, src).len() as i32)
@@ -149,7 +149,7 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
             match handler {
                 Some(Handler(f)) => {
                     let base_comp = compile_expr(ti, base)?;
-                    return f(ti, base_comp, operands);
+                    f(ti, base_comp, operands)
                 },
                 None => {
                     panic!("No handler implemented for method `{}` of type `{:?}`", method, base.type_);
@@ -192,34 +192,34 @@ pub fn build_query_plan<'a>(source : &'a SourceFile,
     }
 
     let tree_interface : Box<dyn TreeInterface> = make_tree_interface(source);
-    let ctx = Context::new(&query);
+    let ctx = Context::new(query);
 
     match &query.select.select_exprs[0].expr.expr {
         Expr_::ConstantExpr(v) => {
             let p = QueryPlan {
                 steps: QueryAction::ConstantValue(v.clone())
             };
-            return Ok(p);
+            Ok(p)
         },
         Expr_::VarRef(var) => {
-            let ty = ctx.symbol_table.get(var).ok_or(anyhow::anyhow!(PlanError::UndeclaredVariable(var.into())))?;
+            let ty = ctx.symbol_table.get(var).ok_or_else(|| anyhow::anyhow!(PlanError::UndeclaredVariable(var.into())))?;
             let unsupported = PlanError::UnsupportedTypeForLanguage(*ty, source.lang);
-            let top_level = tree_interface.top_level_type(ty).ok_or(anyhow::anyhow!(unsupported))?;
+            let top_level = tree_interface.top_level_type(ty).ok_or_else(|| anyhow::anyhow!(unsupported))?;
             let ts_query = tree_sitter::Query::new(ast.language(), &top_level.query)?;
             let flt = match &query.select.where_formula {
                 None => anyhow::Ok(None),
                 Some(w) => {
-                    let flt = compile_expr(&tree_interface, &w)?;
+                    let flt = compile_expr(&tree_interface, w)?;
                     anyhow::Ok(Some(flt))
                 }
             }?;
             let p = QueryPlan {
                 steps: QueryAction::TSQuery(flt, ts_query)
             };
-            return Ok(p);
+            Ok(p)
         },
         unsupported => {
-            return Err(anyhow::anyhow!(PlanError::UnsupportedSelectTarget((*unsupported).clone())));
+            Err(anyhow::anyhow!(PlanError::UnsupportedSelectTarget((*unsupported).clone())))
         }
     }
 }

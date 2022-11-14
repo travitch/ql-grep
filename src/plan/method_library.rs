@@ -23,8 +23,8 @@ fn callable_get_name<'a>(ti : &Box<dyn TreeInterface + 'a>, _base : NodeFilter, 
     assert!(operands.is_empty());
     // This is not necessarily an assertion, as this may not be supported for
     // the current language (which we don't know).
-    let name_matcher = ti.callable_name().ok_or(PlanError::NotSupported("getNames".into(), "callable".into()))?;
-    return Ok(NodeFilter::StringComputation(name_matcher));
+    let name_matcher = ti.callable_name().ok_or_else(|| PlanError::NotSupported("getNames".into(), "callable".into()))?;
+    Ok(NodeFilter::StringComputation(name_matcher))
 }
 
 fn string_regexp_match<'a>(_ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
@@ -49,7 +49,7 @@ fn string_regexp_match<'a>(_ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter
                     rx.is_match(matched_string.as_ref())
                 })
     };
-    return Ok(NodeFilter::Predicate(comp));
+    Ok(NodeFilter::Predicate(comp))
 }
 
 /// Validate the implementations of method calls against the claims in the
@@ -62,13 +62,13 @@ fn string_regexp_match<'a>(_ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter
 /// 2. None of the methods in the library marked as implemented and not present here
 fn validate_library(impls : &HashMap<(Type, String), Handler>) {
     let lib_idx = library_index();
-    for ((base_type, method_name), _v) in impls {
+    for (base_type, method_name) in impls.keys() {
         match lib_idx.get(base_type) {
             None => {
                 panic!("Missing library definition for type `{:?}`", base_type);
             },
             Some(MethodIndex(ref sigs)) => {
-                match sigs.get(&*method_name) {
+                match sigs.get(method_name) {
                     Some(MethodSignature(_name, _arg_types, _ret_type, status)) => {
                         if *status == Some(Status::Unimplemented) {
                             panic!("Method `{}` for type `{:?}` is marked as unimplemented, but has an implementation defined", method_name, base_type);

@@ -1,6 +1,6 @@
-use clap::{Parser};
-use crossbeam_channel;
-use ignore;
+use clap::Parser;
+use crossbeam_channel::{Sender, bounded};
+use ignore::{DirEntry, WalkBuilder, WalkState};
 use tracing::{Level, info, warn};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 use std::path::{PathBuf};
@@ -43,8 +43,8 @@ struct QueryResults {
 }
 
 fn visit_file(query : &Query<Typed>,
-              send : crossbeam_channel::Sender<QueryResults>,
-              ent : Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
+              send : Sender<QueryResults>,
+              ent : Result<DirEntry, ignore::Error>) -> WalkState {
     match ent {
         Err(err) => {
             info!("While parsing directory entry, `{}`", err);
@@ -72,7 +72,7 @@ fn visit_file(query : &Query<Typed>,
             }
         }
     }
-    ignore::WalkState::Continue
+    WalkState::Continue
 }
 
 struct Statistics {
@@ -158,7 +158,7 @@ fn main() -> anyhow::Result<()> {
         select: typed_select
     };
 
-    let (send, recv) = crossbeam_channel::bounded::<QueryResults>(4096);
+    let (send, recv) = bounded::<QueryResults>(4096);
 
     // Spawn a thread to collect all of the intermediate results produced by
     // worker threads
@@ -182,7 +182,7 @@ fn main() -> anyhow::Result<()> {
         stats
     });
 
-    ignore::WalkBuilder::new(root_dir)
+    WalkBuilder::new(root_dir)
         .threads(8)
         .build_parallel()
         .run(|| {
