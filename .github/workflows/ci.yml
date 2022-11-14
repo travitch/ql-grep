@@ -1,0 +1,16 @@
+on: [push, pull_request, pull_request_target]
+name: build
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+      - name: test
+        run: cargo test
