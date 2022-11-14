@@ -12,6 +12,7 @@ use ql_grep::plan::{build_query_plan};
 use ql_grep::query::ir::{Typed, Syntax};
 use ql_grep::query::typecheck::typecheck_query;
 use ql_grep::evaluate::{QueryResult, evaluate_plan};
+use ql_grep::library::LIBRARY_DATA;
 
 mod cli;
 
@@ -123,8 +124,17 @@ fn print_match(fmt_opts : &FormatOptions, sf : &SourceFile, qr : &QueryResult) {
     }
 }
 
+fn print_library() {
+    println!("{}", LIBRARY_DATA);
+}
+
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();
+
+    if args.print_library {
+        print_library();
+        std::process::exit(0);
+    }
 
     // Set up logging
     let subscriber = FmtSubscriber::builder()

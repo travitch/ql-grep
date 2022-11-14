@@ -9,7 +9,7 @@ use knuffel;
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
 
-const LIBRARY_DATA: &str = include_str!("../doc/library.kdl");
+pub const LIBRARY_DATA: &str = include_str!("../doc/library.kdl");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
