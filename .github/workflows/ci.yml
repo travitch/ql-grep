@@ -8,6 +8,8 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+      - name: dependencies
+        run:  sudo apt install build-essential
       - name: build
         uses: actions-rs/cargo@v1
         with:
