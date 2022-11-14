@@ -8,7 +8,7 @@ use std::thread;
 
 use ql_grep::query::{Query, parse_query};
 use ql_grep::source_file::SourceFile;
-use ql_grep::plan::{build_query_plan};
+use ql_grep::plan::build_query_plan;
 use ql_grep::query::ir::{Typed, Syntax};
 use ql_grep::query::typecheck::typecheck_query;
 use ql_grep::evaluate::{QueryResult, evaluate_plan};
