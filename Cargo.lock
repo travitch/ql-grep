@@ -445,6 +445,7 @@ dependencies = [
  "knuffel",
  "lazy_static",
  "miette",
+ "once_cell",
  "regex",
  "thiserror",
  "toml",

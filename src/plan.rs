@@ -1,36 +1,28 @@
 pub mod interface;
 mod cpp;
 mod java;
+mod method_library;
+mod errors;
 
 use std::collections::HashMap;
 
 use crate::plan::interface::{TreeInterface, NodeMatcher};
 use crate::plan::java::JavaTreeInterface;
 use crate::plan::cpp::CPPTreeInterface;
-use crate::query::ir::{Repr, Typed, Expr, Expr_, Type, Constant, EqualityOp, CompOp, AggregateOp, CachedRegex};
+use crate::query::ir::{Repr, Typed, Expr, Expr_, Type, Constant, EqualityOp, CompOp, AggregateOp};
 use crate::query;
 use crate::source_file::{Language, SourceFile};
-
-#[derive(thiserror::Error, Debug)]
-pub enum PlanError {
-    #[error("Expected 1 selected expression but found {0}")]
-    NonSingletonSelect(usize),
-    #[error("Unsupported target for a select expression: `{0:?}`")]
-    UnsupportedSelectTarget(Expr_<Typed>),
-    #[error("Unsupported type for a select expression: `{0:?}`")]
-    UnsupportedSelectType(Type),
-    #[error("Unsupported type `{0:?}` for language {1:?}")]
-    UnsupportedTypeForLanguage(Type, Language),
-    #[error("Use of undefined variable `{0}`")]
-    UndeclaredVariable(String),
-    #[error("Invalid aggregate `{0:?}` with arity {1}")]
-    InvalidAggregateArity(AggregateOp, usize),
-    #[error("Querying {0} is not supported in {1} for this language")]
-    NotSupported(String, String)
-}
+use crate::plan::errors::PlanError;
+use crate::plan::method_library::{Handler, method_impl_for};
 
 pub enum NodeFilter {
     Constant(Constant),
+    /// A reference to a variable
+    ///
+    /// Note that this is generally not used right now, but is an artifact of
+    /// the evaluation (e.g., it might refer to an abstract complex value like a
+    /// Method that has not been reduced to a constant yet)
+    VarRef(String),
     Predicate(NodeMatcher<bool>),
     NumericComputation(NodeMatcher<i32>),
     NumericComparison(Box<NodeFilter>, CompOp, Box<NodeFilter>),
@@ -90,6 +82,7 @@ fn make_tree_interface<'a>(file : &'a SourceFile) -> Box<dyn TreeInterface + 'a>
 fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> anyhow::Result<NodeFilter> {
     match &e.expr {
         Expr_::ConstantExpr(v) => Ok(NodeFilter::Constant(v.clone())),
+        Expr_::VarRef(s) => Ok(NodeFilter::VarRef(s.into())),
         Expr_::RelationalComparison(lhs, op, rhs) => {
             let lhs_f = compile_expr(ti, &*lhs)?;
             let rhs_f = compile_expr(ti, &*rhs)?;
@@ -123,7 +116,7 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
             }
 
             match (op, &exprs[0].expr.expr) {
-                (AggregateOp::Count, Expr_::QualifiedAccess(base, field, operands)) => {
+                (AggregateOp::Count, Expr_::QualifiedAccess(base, field, _operands)) => {
                     // The type checker has already verified that the field
                     // access (which is a method call) is valid based on the
                     // supported library methods, so we don't need to
@@ -143,43 +136,30 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
                 },
                 _ => {
                     unimplemented!();
+
                 }
             }
         },
         Expr_::QualifiedAccess(base, method, operands) => {
-            if method == "getName" && base.type_.is_callable() {
-                assert!(operands.is_empty());
-
-                let name_matcher = ti.callable_name().ok_or(PlanError::NotSupported("names".into(), "callable".into()))?;
-                let flt = NodeFilter::StringComputation(name_matcher);
-                return Ok(flt);
-            } else if method == "regexpMatch" && base.type_ == Type::PrimString {
-                assert!(operands.len() == 1);
-                // The base must be a string computation.
-                let base_comp = compile_expr(ti, base)?;
-                let c = match base_comp {
-                    NodeFilter::StringComputation(c) => c,
-                    _ => panic!("Invalid base computation for `regexpMatch`")
-                };
-                let rx : regex::Regex = match &operands[0].expr {
-                    Expr_::ConstantExpr(Constant::Regex(CachedRegex(_, rx))) => rx.clone(),
-                    _ => panic!("Invalid regex for `regexpMatch`")
-                };
-                let comp = NodeMatcher {
-                    query: c.query,
-                    extract: Box::new(move |matches, src| {
-                                let matched_string = (c.extract)(matches, src);
-                                rx.is_match(matched_string.as_ref())
-                            })
-                };
-                return Ok(NodeFilter::Predicate(comp));
+            // We store the method implementations in a map to keep this case of
+            // the match reasonably-sized.  We look up method implementations
+            // based on the method name and the base type computed by the type
+            // checker.
+            let handler = method_impl_for(base.type_, method);
+            match handler {
+                Some(Handler(f)) => {
+                    let base_comp = compile_expr(ti, base)?;
+                    return f(ti, base_comp, operands);
+                },
+                None => {
+                    panic!("No handler implemented for method `{}` of type `{:?}`", method, base.type_);
+                }
             }
-
-            unimplemented!()
         },
-        _ => unimplemented!()
     }
 }
+
+
 
 /// Build a query plan for the given query in the given language
 ///

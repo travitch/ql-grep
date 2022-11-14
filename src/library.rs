@@ -3,10 +3,41 @@
 /// The actual definitions and types are provided by the doc/library.kdl file,
 /// which is both documentation and the source of truth for the type checker.
 
+pub mod index;
+
 use knuffel;
+use once_cell::sync::Lazy;
 use std::collections::HashSet;
 
-const LIBRARY: &str = include_str!("../doc/library.kdl");
+const LIBRARY_DATA: &str = include_str!("../doc/library.kdl");
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Status {
+    Unimplemented,
+    Deprecated
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct StatusParseError;
+
+impl std::fmt::Display for StatusParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error parsing status")
+    }
+}
+
+impl std::error::Error for StatusParseError {}
+
+impl std::str::FromStr for Status {
+    type Err = StatusParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Unimplemented" => Ok(Status::Unimplemented),
+            "Deprecated" => Ok(Status::Deprecated),
+            _ => Err(StatusParseError)
+        }
+    }
+}
 
 #[derive(knuffel::Decode)]
 pub struct Parameter {
@@ -22,8 +53,8 @@ pub struct Method {
     pub name: String,
     #[knuffel(property(name="type"))]
     pub type_: String,
-    #[knuffel(property)]
-    pub status: Option<String>,
+    #[knuffel(property, str)]
+    pub status: Option<Status>,
     #[knuffel(property)]
     pub docstring: Option<String>,
     #[knuffel(children(name="parameter"))]
@@ -81,9 +112,13 @@ fn validate_library(types : &Vec<Type>) {
     }
 }
 
-pub fn library_types() -> Vec<Type> {
-    // Aggressively let this fail, as this should be statically correct
-    let types = knuffel::parse::<Vec<Type>>("library.kdl", LIBRARY).unwrap();
+static LIBRARY: Lazy<Vec<Type>> = Lazy::new(|| {
+    let types = knuffel::parse::<Vec<Type>>("library.kdl", LIBRARY_DATA).unwrap();
     validate_library(&types);
     types
+});
+
+pub fn library_types() -> &'static Vec<Type> {
+    // Aggressively let this fail, as this should be statically correct
+    Lazy::force(&LIBRARY)
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::library;
+use crate::library::index::{library_index, MethodIndex, MethodSignature};
 use crate::query::ir::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -25,54 +25,14 @@ pub enum TypecheckError {
     UnexpectedExpressionType(Expr<Syntax>, Type, Type)
 }
 
-struct MethodSignature(String, Vec<Type>, Type);
-struct MethodIndex(HashMap<String, MethodSignature>);
-
 struct TypeEnv {
     /// Records the type of each variable in scope
     env: HashMap<String, Type>,
     /// Provides type signatures for all of the library types and their methods
-    type_index: HashMap<Type, MethodIndex>,
-}
-
-fn build_method_signature(method : &library::Method) -> MethodSignature {
-    let mut param_types = Vec::new();
-    let ret_ty = Type::from_str(method.type_.as_str()).unwrap();
-    for p in &method.parameters {
-        param_types.push(Type::from_str(p.type_.as_str()).unwrap());
-    }
-
-    MethodSignature(method.name.clone(), param_types, ret_ty)
-}
-
-fn index_library_type(lib_ty : &library::Type) -> MethodIndex {
-    let mut res = HashMap::new();
-    for m in &lib_ty.methods {
-        let sig = build_method_signature(&m);
-        res.insert(m.name.clone(), sig);
-    }
-
-    MethodIndex(res)
-}
-
-/// Index the types defined in the library
-///
-/// Note that this just panics if it encounters something malformed because it
-/// is just an error in the data file (rather than bad user input).
-fn index_library(library : &Vec<library::Type>) -> HashMap<Type, MethodIndex> {
-    let mut ty_idx = HashMap::new();
-    for ty in library {
-        let midx = index_library_type(&ty);
-        println!("indexing {}", ty.name.as_str());
-        let ty = Type::from_str(ty.name.as_str()).unwrap();
-        ty_idx.insert(ty, midx);
-    }
-
-    ty_idx
+    type_index: &'static HashMap<Type, MethodIndex>,
 }
 
 fn build_initial_type_environment(syntax : &Select<Syntax>) -> TypeEnv {
-    let lib_types = library::library_types();
     let mut res = HashMap::new();
 
     for decl in &syntax.var_decls {
@@ -81,7 +41,7 @@ fn build_initial_type_environment(syntax : &Select<Syntax>) -> TypeEnv {
 
     TypeEnv {
         env: res,
-        type_index: index_library(&lib_types),
+        type_index: library_index(),
     }
 }
 
@@ -262,7 +222,7 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             let base_ty = typecheck_expr(env, &base)?;
             let MethodIndex(method_idx) = env.type_index.get(&base_ty.type_)
                 .ok_or(anyhow::anyhow!(TypecheckError::InvalidReceiverTypeForMethod(base_ty.type_, accessor.clone())))?;
-            let MethodSignature(method_name, arg_types, ret_ty) = method_idx.get(accessor)
+            let MethodSignature(method_name, arg_types, ret_ty, _status) = method_idx.get(accessor)
                 .ok_or(anyhow::anyhow!(TypecheckError::InvalidMethodForType(accessor.clone(), base_ty.type_)))?;
 
             if operands.len() != arg_types.len() {

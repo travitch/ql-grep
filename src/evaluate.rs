@@ -32,6 +32,9 @@ fn evaluate_filter(target : &source_file::SourceFile, flt : &NodeFilter, n : &tr
         NodeFilter::Constant(k) => {
             return Ok(Value::Constant(k.clone()));
         },
+        NodeFilter::VarRef(v) => {
+            panic!("Unexpected evaluation of a `VarRef` of {}", v);
+        },
         NodeFilter::Predicate(nm) => {
             let mut cur = tree_sitter::QueryCursor::new();
             let query = tree_sitter::Query::new(n.language(), nm.query.as_ref())?;
