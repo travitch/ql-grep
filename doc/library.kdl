@@ -50,3 +50,13 @@ type "Parameter" {
 type "Type" {
     method "getName" type="string" status="Unimplemented"
 }
+
+type "Regex" {
+
+}
+
+type "string" {
+    method "regexpMatch" type="boolean" {
+        parameter "regexp" type="Regex"
+    }
+}

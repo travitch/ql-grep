@@ -157,7 +157,7 @@ fn string_literal() {
     let ql = "from Method m where m.getName() = \"foo\" select m";
     let r = parse_query(ql);
 
-    let get_name = untyped(Expr_::QualifiedAccess(Box::new(var_ref("m")), "getName".into()));
+    let get_name = untyped(Expr_::QualifiedAccess(Box::new(var_ref("m")), "getName".into(), Vec::new()));
     let str_lit = untyped(Expr_::ConstantExpr(Constant::String_("foo".into())));
     let cmp = untyped(Expr_::EqualityComparison(Box::new(get_name), EqualityOp::EQ, Box::new(str_lit)));
 
@@ -178,6 +178,33 @@ fn string_literal() {
 }
 
 #[test]
+/// Ensure that predicate arguments are parsed properly
+fn predicate_argument() {
+    let ql = "from Method m where m.regexpMatch(\"foo\") select m";
+    let r = parse_query(ql);
+
+    let str_lit = untyped(Expr_::ConstantExpr(Constant::String_("foo".into())));
+    let mut args = Vec::new();
+    args.push(str_lit);
+    let rx_match = untyped(Expr_::QualifiedAccess(Box::new(var_ref("m")), "regexpMatch".into(), args));
+
+    let mut exprs = Vec::new();
+    let as_expr = AsExpr {
+        expr: var_ref("m"),
+        ident: None
+    };
+    exprs.push(as_expr);
+
+    let expected = Select {
+        select_exprs: exprs,
+        where_formula: Some(rx_match),
+        var_decls: declare(&[(Type::Method, "m")])
+    };
+
+    assert_eq!(expected, r.unwrap().select);
+}
+
+#[test]
 fn select_filter_parameter_count() {
     let ql = "from Method m where count(m.getAParameter()) > 5 select m";
     let r = parse_query(ql);
@@ -191,7 +218,7 @@ fn select_filter_parameter_count() {
 
     let agg_body = AsExpr {
         expr: Expr {
-            expr: Expr_::QualifiedAccess(Box::new(var_ref("m")), "getAParameter".into()),
+            expr: Expr_::QualifiedAccess(Box::new(var_ref("m")), "getAParameter".into(), Vec::new()),
             type_: Untyped
         },
         ident: None

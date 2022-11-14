@@ -445,6 +445,7 @@ dependencies = [
  "knuffel",
  "lazy_static",
  "miette",
+ "regex",
  "thiserror",
  "toml",
  "tracing",

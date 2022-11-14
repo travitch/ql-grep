@@ -12,10 +12,18 @@ pub enum TypecheckError {
     #[error("Invalid receiver type `{0:?}` for method `{1}`")]
     InvalidReceiverTypeForMethod(Type, String),
     #[error("Invalid method `{0}` for expression of type `{1:?}`")]
-    InvalidMethodForType(String, Type)
+    InvalidMethodForType(String, Type),
+    #[error("Invalid arity for method `{0}`; found {1} but expected {2} arguments")]
+    InvalidArityForMethod(String, usize, usize),
+    #[error("Invalid type for operand {1} in call to method `{0}`: expected `{3:?}` but found `{2:?}`")]
+    InvalidTypeForMethodOperand(String, usize, Type, Type),
+    #[error("Non-literal regular expression in call to method `{0}` in operand {1}")]
+    NonLiteralRegex(String, usize),
+    #[error("Invalid regular expression `{0}`: {1}")]
+    InvalidRegularExpression(String, regex::Error)
 }
 
-struct MethodSignature(Vec<Type>, Type);
+struct MethodSignature(String, Vec<Type>, Type);
 struct MethodIndex(HashMap<String, MethodSignature>);
 
 struct TypeEnv {
@@ -32,7 +40,7 @@ fn build_method_signature(method : &library::Method) -> MethodSignature {
         param_types.push(Type::from_str(p.type_.as_str()).unwrap());
     }
 
-    MethodSignature(param_types, ret_ty)
+    MethodSignature(method.name.clone(), param_types, ret_ty)
 }
 
 fn index_library_type(lib_ty : &library::Type) -> MethodIndex {
@@ -75,6 +83,44 @@ fn build_initial_type_environment(syntax : &Select<Syntax>) -> TypeEnv {
     }
 }
 
+/// Promote typed operands in argument positions when needed
+///
+/// There are some operands that we might have to promote implicitly based on
+/// the expected argument types of a method (according to the library).  For
+/// example, we promote strings to regular expressions (by compiling them).
+fn typecheck_operand(method_name : &str,
+                     idx : usize,
+                     typed_expr : &Expr<Typed>,
+                     expected_type : Type) -> anyhow::Result<Expr<Typed>> {
+    match (typed_expr.type_, expected_type) {
+        (Type::PrimString, Type::Regex) => {
+            // We do an implicit promotion (since there is no other way to construct these values)
+            match &typed_expr.expr {
+                Expr_::ConstantExpr(Constant::String_(s)) => {
+                    let rx = regex::Regex::new(&s).or_else(|rx_err| Err(anyhow::anyhow!(TypecheckError::InvalidRegularExpression(method_name.into(), rx_err))))?;
+                    let rx_val = CachedRegex(s.clone(), rx);
+                    let tv = Expr {
+                        expr: Expr_::ConstantExpr(Constant::Regex(rx_val)),
+                        type_: Type::Regex
+                    };
+                    return Ok(tv);
+                },
+                _ => {
+                    return Err(anyhow::anyhow!(TypecheckError::NonLiteralRegex(method_name.into(), idx)));
+                }
+            }
+        },
+        (t1, t2) => {
+            if t1 == t2 {
+                return Ok(typed_expr.clone());
+            } else {
+                let err = TypecheckError::InvalidTypeForMethodOperand(method_name.into(), idx, t1, t2);
+                return Err(anyhow::anyhow!(err));
+            }
+        }
+    }
+}
+
 fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Expr<Typed>> {
     match &expr.expr {
         Expr_::ConstantExpr(c) => {
@@ -95,6 +141,12 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
                     return Ok(Expr {
                         expr: Expr_::ConstantExpr(c.clone()),
                         type_: Type::PrimString
+                    })
+                },
+                Constant::Regex(_) => {
+                    return Ok(Expr {
+                        expr: Expr_::ConstantExpr(c.clone()),
+                        type_: Type::Regex
                     })
                 }
             }
@@ -164,16 +216,41 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
                 type_: ty
             });
         },
-        Expr_::QualifiedAccess(base, accessor) => {
+        Expr_::QualifiedAccess(base, accessor, operands) => {
+            let mut typed_operands = Vec::new();
+            for op in operands {
+                let typed_op = typecheck_expr(env, op)?;
+                typed_operands.push(typed_op);
+            }
+
             let base_ty = typecheck_expr(env, &base)?;
             let MethodIndex(method_idx) = env.type_index.get(&base_ty.type_)
                 .ok_or(anyhow::anyhow!(TypecheckError::InvalidReceiverTypeForMethod(base_ty.type_, accessor.clone())))?;
-            let MethodSignature(arg_types, ret_ty) = method_idx.get(accessor)
+            let MethodSignature(method_name, arg_types, ret_ty) = method_idx.get(accessor)
                 .ok_or(anyhow::anyhow!(TypecheckError::InvalidMethodForType(accessor.clone(), base_ty.type_)))?;
 
-            // FIXME: We are not yet parsing operands for methods
+            if operands.len() != arg_types.len() {
+                let err = TypecheckError::InvalidArityForMethod(method_name.into(), operands.len(), arg_types.len());
+                return Err(anyhow::anyhow!(err));
+            }
+
+            let mname = method_name.clone();
+
+            let mut promoted_operands = Vec::new();
+            // Next, we have to typecheck any operands
+            //
+            // This is a bit tricky since we can do some kinds of implicit
+            // promotion here. For example, we learn that the string literal in
+            // the first argument to `string.regexpMatch` is actually a Regex,
+            // so we can parse and promote it here.
+            for (idx, operand) in typed_operands.iter().enumerate() {
+                let expected_type = arg_types[idx];
+                let typed_operand = typecheck_operand(&mname, idx, operand, expected_type)?;
+                promoted_operands.push(typed_operand);
+            }
+
             return Ok(Expr {
-                expr: Expr_::QualifiedAccess(Box::new(base_ty), accessor.clone()),
+                expr: Expr_::QualifiedAccess(Box::new(base_ty), accessor.clone(), promoted_operands),
                 type_: *ret_ty
             });
         },

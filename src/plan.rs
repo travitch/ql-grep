@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use crate::plan::interface::{TreeInterface, NodeMatcher};
 use crate::plan::java::JavaTreeInterface;
 use crate::plan::cpp::CPPTreeInterface;
-use crate::query::ir::{Repr, Typed, Expr, Expr_, Type, Constant, EqualityOp, CompOp, AggregateOp};
+use crate::query::ir::{Repr, Typed, Expr, Expr_, Type, Constant, EqualityOp, CompOp, AggregateOp, CachedRegex};
 use crate::query;
 use crate::source_file::{Language, SourceFile};
 
@@ -109,7 +109,7 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
             }
 
             match (op, &exprs[0].expr.expr) {
-                (AggregateOp::Count, Expr_::QualifiedAccess(base, field)) => {
+                (AggregateOp::Count, Expr_::QualifiedAccess(base, field, operands)) => {
                     // The type checker has already verified that the field
                     // access (which is a method call) is valid based on the
                     // supported library methods, so we don't need to
@@ -132,11 +132,33 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
                 }
             }
         }
-        Expr_::QualifiedAccess(base, method) => {
+        Expr_::QualifiedAccess(base, method, operands) => {
             if method == "getName" && base.type_.is_callable() {
+                assert!(operands.is_empty());
+
                 let name_matcher = ti.callable_name().ok_or(PlanError::NotSupported("names".into(), "callable".into()))?;
                 let flt = NodeFilter::StringComputation(name_matcher);
                 return Ok(flt);
+            } else if method == "regexpMatch" && base.type_ == Type::PrimString {
+                assert!(operands.len() == 1);
+                // The base must be a string computation.
+                let base_comp = compile_expr(ti, base)?;
+                let c = match base_comp {
+                    NodeFilter::StringComputation(c) => c,
+                    _ => panic!("Invalid base computation for `regexpMatch`")
+                };
+                let rx : regex::Regex = match &operands[0].expr {
+                    Expr_::ConstantExpr(Constant::Regex(CachedRegex(_, rx))) => rx.clone(),
+                    _ => panic!("Invalid regex for `regexpMatch`")
+                };
+                let comp = NodeMatcher {
+                    query: c.query,
+                    extract: Box::new(move |matches, src| {
+                                let matched_string = (c.extract)(matches, src);
+                                rx.is_match(matched_string.as_ref())
+                            })
+                };
+                return Ok(NodeFilter::Predicate(comp));
             }
 
             unimplemented!()

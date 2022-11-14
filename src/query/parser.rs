@@ -124,9 +124,25 @@ fn parse_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Re
             let expr = parse_expr(node.named_child(0).unwrap(), source)?;
             let rhs_node = node.named_child(1).unwrap();
             expect_node_kind(rhs_node, "qualifiedRhs")?;
-            let name_node = single_child(rhs_node, "predicateName")?;
+
+            // Each of the arguments are parallel children to the predicate
+            // name, so we get the predicate name at index 0 and take the rest
+            // as arguments.
+            if rhs_node.named_child_count() == 0 {
+                return Err(anyhow::anyhow!(QueryError::MalformedNode("qualified_expr".into(), rhs_node.range())));
+            }
+
+            let name_node = rhs_node.named_child(0).unwrap();
+
+            let mut arguments = Vec::new();
+            for i in 1 .. rhs_node.named_child_count() {
+                let argument_node = rhs_node.named_child(i).unwrap();
+                let argument = parse_expr(argument_node, source)?;
+                arguments.push(argument);
+            }
+
             let pred_name = name_node.utf8_text(source)?;
-            Expr_::QualifiedAccess(Box::new(expr), pred_name.into())
+            Expr_::QualifiedAccess(Box::new(expr), pred_name.into(), arguments)
         },
         _ => {
             panic!("Unsupported expression: {}", node.kind())
@@ -251,6 +267,10 @@ pub fn parse_query_ast(ast : &tree_sitter::Tree, source : impl AsRef<[u8]>) -> a
                 declared_vars.push(decl);
             },
             "comp_term" => {
+                let e = parse_expr(child, source.as_ref())?;
+                filter = Some(e);
+            },
+            "qualified_expr" => {
                 let e = parse_expr(child, source.as_ref())?;
                 filter = Some(e);
             },

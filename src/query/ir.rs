@@ -32,18 +32,34 @@ impl Repr for Typed {
     type Evaluator<T> = ();
 }
 
+/// A compiled regular expression with its original string
+///
+/// The original string is used for comparisons, which are not supported on regular expressions.
+#[derive(Debug, Clone)]
+pub struct CachedRegex(pub String, pub regex::Regex);
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Constant {
     Boolean(bool),
     Integer(i32),
-    String_(String)
+    String_(String),
+    Regex(CachedRegex)
 }
+
+impl PartialEq for CachedRegex {
+    fn eq(&self, other : &CachedRegex) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for CachedRegex {}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Type {
     PrimInteger,
     PrimBoolean,
     PrimString,
+    Regex,
     Type,
     Class,
     Function,
@@ -63,6 +79,7 @@ impl Type {
             "Callable" => Some(Type::Callable),
             "Field" => Some(Type::Field),
             "Type" => Some(Type::Type),
+            "Regex" => Some(Type::Regex),
             "int" => Some(Type::PrimInteger),
             "boolean" => Some(Type::PrimBoolean),
             "string" => Some(Type::PrimString),
@@ -79,6 +96,7 @@ impl Type {
             Type::Field => false,
             Type::Class => false,
             Type::Type => false,
+            Type::Regex => false,
             Type::PrimString => false,
             Type::PrimInteger => false,
             Type::PrimBoolean => false
@@ -113,7 +131,11 @@ pub enum AggregateOp {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Expr_<R: Repr> {
-    QualifiedAccess(Box<Expr<R>>, String),
+    /// A method called in a base object, with a list of arguments
+    QualifiedAccess(Box<Expr<R>>, String, Vec<Expr<R>>),
+    // FIXME: Make this explicit and eliminate the aggregate constructor
+    //
+    // Count(Box<Expr<R>>),
     Aggregate(AggregateOp, Vec<AsExpr<R>>),
     RelationalComparison(Box<Expr<R>>, CompOp, Box<Expr<R>>),
     EqualityComparison(Box<Expr<R>>, EqualityOp, Box<Expr<R>>),
