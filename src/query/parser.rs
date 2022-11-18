@@ -3,9 +3,26 @@ use tree_sitter;
 use crate::query::ir::{Syntax, AsExpr, Expr, Expr_, Type, VarDecl, Select, EqualityOp, CompOp, Constant, AggregateOp, Untyped};
 use crate::query::error::QueryError;
 
+
+/// Get the first child of the given node that has the provided type
+///
+/// We need to use this to be robust against comments appearing as children of
+/// any node, which would throw off any indexing.
+fn get_child_of_kind<'a>(node : tree_sitter::Node<'a>, target_kind : &'static str) -> anyhow::Result<tree_sitter::Node<'a>> {
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == target_kind {
+            return Ok(child);
+        }
+    }
+
+    Err(anyhow::anyhow!(QueryError::MissingExpectedChildNode(node.range(), target_kind.into())))
+}
+
 /// Expect a single child node with any type
 fn any_single_child(node : tree_sitter::Node) -> anyhow::Result<tree_sitter::Node> {
     if node.named_child_count() != 1 {
+        println!("node count: {:?} ({:?}, {:?})", node.named_child_count(), node.named_child(0).unwrap(), node.named_child(1).unwrap());
         return Err(anyhow::anyhow!(QueryError::MissingExpectedChildNode(node.range(), "$ANY".into())));
     }
 
@@ -85,53 +102,48 @@ fn parse_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Re
             Expr_::ConstantExpr(val)
         },
         "variable" => {
-            let var_name_node = single_child(node, "varName")?;
+            let var_name_node = get_child_of_kind(node, "varName")?;
             let var_name = parse_var_name(var_name_node, source)?;
             Expr_::VarRef(var_name)
         },
         "comp_term" => {
             // EXPR COMP_OP EXPR
-            if node.named_child_count() != 3 {
-                return Err(anyhow::anyhow!(QueryError::MalformedNode("comp_term".into(), node.range())));
-            }
-
-            let lhs = parse_expr(node.child(0).unwrap(), source)?;
-            let op = parse_comp_op(node.child(1).unwrap(), source)?;
-            let rhs = parse_expr(node.child(2).unwrap(), source)?;
+            let lhs_node = node.child_by_field_name("left")
+                .ok_or_else(|| anyhow::anyhow!(QueryError::MalformedNode("comp_term".into(), node.range())))?;
+            let lhs = parse_expr(lhs_node, source)?;
+            let op_node = get_child_of_kind(node, "compop")?;
+            let op = parse_comp_op(op_node, source)?;
+            let rhs_node = node.child_by_field_name("right")
+                .ok_or_else(|| anyhow::anyhow!(QueryError::MalformedNode("comp_term".into(), node.range())))?;
+            let rhs = parse_expr(rhs_node, source)?;
             match op {
                 SomeComparison::RelComp(rop) => Expr_::RelationalComparison(Box::new(lhs), rop, Box::new(rhs)),
                 SomeComparison::EqComp(eop) => Expr_::EqualityComparison(Box::new(lhs), eop, Box::new(rhs))
             }
         },
         "conjunction" => {
-            if node.named_child_count() != 2 {
-                return Err(anyhow::anyhow!(QueryError::MalformedNode("conjunction".into(), node.range())));
-            }
-
-            let lhs = parse_expr(node.named_child(0).unwrap(), source)?;
-            let rhs = parse_expr(node.named_child(1).unwrap(), source)?;
+            let lhs_node = node.child_by_field_name("left")
+                .ok_or_else(|| anyhow::anyhow!(QueryError::MalformedNode("conjunction".into(), node.range())))?;
+            let lhs = parse_expr(lhs_node, source)?;
+            let rhs_node = node.child_by_field_name("right")
+                .ok_or_else(|| anyhow::anyhow!(QueryError::MalformedNode("conjunction".into(), node.range())))?;
+            let rhs = parse_expr(rhs_node, source)?;
             Expr_::LogicalConjunction(Box::new(lhs), Box::new(rhs))
         },
         "disjunction" => {
-            if node.named_child_count() != 2 {
-                return Err(anyhow::anyhow!(QueryError::MalformedNode("disjunction".into(), node.range())));
-            }
-
-            let lhs = parse_expr(node.named_child(0).unwrap(), source)?;
-            let rhs = parse_expr(node.named_child(1).unwrap(), source)?;
-            Expr_::LogicalConjunction(Box::new(lhs), Box::new(rhs))
+            let lhs_node = node.child_by_field_name("left")
+                .ok_or_else(|| anyhow::anyhow!(QueryError::MalformedNode("disjunction".into(), node.range())))?;
+            let lhs = parse_expr(lhs_node, source)?;
+            let rhs_node = node.child_by_field_name("right")
+                .ok_or_else(|| anyhow::anyhow!(QueryError::MalformedNode("disjunction".into(), node.range())))?;
+            let rhs = parse_expr(rhs_node, source)?;
+            Expr_::LogicalDisjunction(Box::new(lhs), Box::new(rhs))
         },
         "aggregate" => {
-            // aggId expr_aggregate_body
-            if node.named_child_count() != 2 {
-                return Err(anyhow::anyhow!(QueryError::MalformedNode("aggregate".into(), node.range())));
-            }
-
-            let op_node = node.named_child(0).unwrap();
+            let op_node = get_child_of_kind(node, "aggId")?;
             let op = parse_aggregate_op(op_node, source)?;
-            let agg_body = node.named_child(1).unwrap();
-            expect_node_kind(agg_body, "expr_aggregate_body")?;
-            let as_exprs_node = single_child(agg_body, "asExprs")?;
+            let agg_body = get_child_of_kind(node, "expr_aggregate_body")?;
+            let as_exprs_node = get_child_of_kind(agg_body, "asExprs")?;
             let exprs = parse_as_exprs(as_exprs_node, source)?;
             Expr_::Aggregate(op, exprs)
         },
@@ -263,14 +275,13 @@ fn parse_var_decl<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow
 pub fn parse_query_ast(ast : &tree_sitter::Tree, source : impl AsRef<[u8]>) -> anyhow::Result<Select<Syntax>> {
     println!("Query: \n{:?}", ast.root_node().to_sexp());
     let root = ast.root_node();
-    let module_member = single_child(root, "moduleMember")?;
-    let sel = single_child(module_member, "select")?;
+    let module_member = get_child_of_kind(root, "moduleMember")?;
+    let sel = get_child_of_kind(module_member, "select")?;
 
     let mut selected_exprs = Vec::new();
     let mut declared_vars = Vec::new();
     let mut filter = None;
 
-    println!("# children = {}, #named children={}", sel.child_count(), sel.named_child_count());
     let mut cursor = sel.walk();
     for child in sel.named_children(&mut cursor) {
         println!("child: {:?}", child.to_sexp());

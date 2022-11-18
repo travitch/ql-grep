@@ -19,5 +19,5 @@ pub enum QueryError {
     #[error("Invalid comparison operator `{0}` at {1:?}")]
     InvalidComparisonOp(String, tree_sitter::Range),
     #[error("Invalid aggregate operator `{0}` at {1:?}")]
-    InvalidAggregateOp(String, tree_sitter::Range)
+    InvalidAggregateOp(String, tree_sitter::Range),
 }
