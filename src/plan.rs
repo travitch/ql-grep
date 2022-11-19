@@ -37,7 +37,6 @@ pub struct Matching;
 
 impl Repr for Matching {
     type Type = Type;
-    type Evaluator<T> = NodeMatcher<T>;
 }
 
 /// The actions that comprise a query plan

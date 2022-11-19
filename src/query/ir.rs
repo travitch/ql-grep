@@ -8,7 +8,6 @@ where
     <Self as Repr>::Type: std::fmt::Debug
 {
     type Type;
-    type Evaluator<T>;
 }
 
 /// The raw syntax before type checking
@@ -20,7 +19,6 @@ pub struct Untyped;
 
 impl Repr for Syntax {
     type Type = Untyped;
-    type Evaluator<T> = ();
 }
 
 /// The IR after type checking
@@ -29,7 +27,6 @@ pub struct Typed;
 
 impl Repr for Typed {
     type Type = Type;
-    type Evaluator<T> = ();
 }
 
 /// A compiled regular expression with its original string
