@@ -4,12 +4,14 @@ pub mod error;
 pub mod ir;
 pub mod parser;
 pub mod typecheck;
+pub mod val_type;
 
 use tree_sitter;
 
 use crate::query::ir::*;
 use crate::query::error::QueryError;
 use crate::query::parser::parse_query_ast;
+use crate::query::val_type::Type;
 
 /// An abstract representation of queries
 pub struct Query<R: Repr> {
@@ -64,7 +66,7 @@ fn declare(vars : &[(Type, &str)]) -> Vec<VarDecl> {
 
     for (ty, var_name) in vars {
         let decl = VarDecl {
-            type_: *ty,
+            type_: ty.clone(),
             name: (*var_name).into()
         };
         res.push(decl);

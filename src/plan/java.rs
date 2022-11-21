@@ -1,6 +1,6 @@
 use tree_sitter::Node;
 
-use crate::query::ir::Type;
+use crate::query::val_type::Type;
 use crate::plan::interface::*;
 use crate::source_file::SourceFile;
 

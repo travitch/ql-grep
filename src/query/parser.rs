@@ -1,8 +1,9 @@
+use std::str::FromStr;
 use tree_sitter;
 
-use crate::query::ir::{Syntax, AsExpr, Expr, Expr_, Type, VarDecl, Select, EqualityOp, CompOp, Constant, AggregateOp, Untyped};
+use crate::query::ir::{Syntax, AsExpr, Expr, Expr_, VarDecl, Select, EqualityOp, CompOp, Constant, AggregateOp, Untyped};
 use crate::query::error::QueryError;
-
+use crate::query::val_type::Type;
 
 /// Get the first child of the given node that has the provided type
 ///
@@ -247,10 +248,7 @@ fn parse_type_expr<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyho
     expect_node_kind(node, "typeExpr")?;
     let class_name = single_child(node, "className")?;
     let s = class_name.utf8_text(source)?;
-    match Type::from_string(s) {
-        Some(ty) => Ok(ty),
-        None => Err(anyhow::anyhow!(QueryError::UnsupportedType(s.into(), node.range())))
-    }
+    Type::from_str(s).map_err(|_e| anyhow::anyhow!(QueryError::UnsupportedType(s.into(), node.range())))
 }
 
 fn parse_var_decl<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow::Result<VarDecl> {

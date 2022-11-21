@@ -8,6 +8,11 @@ pub mod index;
 use knuffel;
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
+use std::error::Error;
+use std::fmt::Display;
+use std::str::FromStr;
+
+use crate::query::val_type;
 
 pub const LIBRARY_DATA: &str = include_str!("../doc/library.kdl");
 
@@ -20,15 +25,15 @@ pub enum Status {
 #[derive(Debug, PartialEq, Eq)]
 pub struct StatusParseError;
 
-impl std::fmt::Display for StatusParseError {
+impl Display for StatusParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Error parsing status")
     }
 }
 
-impl std::error::Error for StatusParseError {}
+impl Error for StatusParseError {}
 
-impl std::str::FromStr for Status {
+impl FromStr for Status {
     type Err = StatusParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -69,14 +74,37 @@ pub struct Type {
     pub methods: Vec<Method>,
 }
 
-fn validate_parameter(seen_types : &HashSet<String>, m : &Method, p : &Parameter) {
-    if seen_types.get(&p.type_).is_none() {
+/// We want to only reason about the presence/absence of the non-aggregate types
+/// so we remove any `List` or `Relational` type constructors.  Other types are
+/// returned as-is.
+fn drop_aggregate_types(ty : val_type::Type) -> val_type::Type {
+    match ty {
+        val_type::Type::Function => ty,
+        val_type::Type::Method => ty,
+        val_type::Type::Callable => ty,
+        val_type::Type::Field => ty,
+        val_type::Type::Class => ty,
+        val_type::Type::Type => ty,
+        val_type::Type::Regex => ty,
+        val_type::Type::Parameter => ty,
+        val_type::Type::PrimString => ty,
+        val_type::Type::PrimInteger => ty,
+        val_type::Type::PrimBoolean => ty,
+        val_type::Type::List(inner) => drop_aggregate_types(*inner),
+        val_type::Type::Relational(inner) => drop_aggregate_types(*inner),
+    }
+}
+
+fn validate_parameter(seen_types : &HashSet<val_type::Type>, m : &Method, p : &Parameter) {
+    let p_ty = drop_aggregate_types(val_type::Type::from_str(&p.type_).unwrap());
+    if seen_types.get(&p_ty).is_none() {
         panic!("Parameter {} in {} references undefined type {}", p.name, m.name, p.type_);
     }
 }
 
-fn validate_method(seen_types : &HashSet<String>, m : &Method) {
-    if seen_types.get(&m.type_).is_none() {
+fn validate_method(seen_types : &HashSet<val_type::Type>, m : &Method) {
+    let ret_ty = drop_aggregate_types(val_type::Type::from_str(&m.type_).unwrap());
+    if seen_types.get(&ret_ty).is_none() {
         panic!("Method {} references undefined type {}", m.name, m.type_);
     }
 
@@ -85,7 +113,7 @@ fn validate_method(seen_types : &HashSet<String>, m : &Method) {
     }
 }
 
-fn validate_type(seen_types : &HashSet<String>, t : &Type) {
+fn validate_type(seen_types : &HashSet<val_type::Type>, t : &Type) {
     for m in &t.methods {
         validate_method(seen_types, m);
     }
@@ -93,17 +121,16 @@ fn validate_type(seen_types : &HashSet<String>, t : &Type) {
 
 /// Perform a validation pass to ensure that all referenced types are present
 fn validate_library(types : &Vec<Type>) {
-    let mut seen_types : HashSet<String> = HashSet::new();
+    let mut seen_types : HashSet<val_type::Type> = HashSet::new();
 
     // Seed with primitive types
-    seen_types.insert("int".into());
-    seen_types.insert("float".into());
-    seen_types.insert("string".into());
-    seen_types.insert("boolean".into());
+    seen_types.insert(val_type::Type::PrimInteger);
+    seen_types.insert(val_type::Type::PrimBoolean);
+    seen_types.insert(val_type::Type::PrimString);
 
     // Collect the top-level type definitions in the library
     for t in types {
-        seen_types.insert(t.name.clone());
+        seen_types.insert(val_type::Type::from_str(&t.name).unwrap());
     }
 
     // Now traverse all of the definitions

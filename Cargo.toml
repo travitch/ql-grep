@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "^1"
 clap = { version = "^4.0", features = ["derive"] }
+combine = "^4.6"
 crossbeam-channel = "^0.5"
 ignore = "^0.4"
 knuffel = "^2"

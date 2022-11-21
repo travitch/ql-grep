@@ -1,4 +1,5 @@
 use crate::query::ir::*;
+use crate::query::val_type::Type;
 use crate::source_file::Language;
 
 #[derive(thiserror::Error, Debug)]

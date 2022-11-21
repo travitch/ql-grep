@@ -1,6 +1,6 @@
 use tree_sitter::QueryMatches;
 
-use crate::query::ir::{Type};
+use crate::query::val_type::Type;
 use crate::source_file::SourceFile;
 
 pub struct TopLevelMatcher {

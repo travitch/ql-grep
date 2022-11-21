@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::library::index::{library_index, MethodIndex, MethodSignature};
 use crate::query::ir::*;
+use crate::query::val_type::Type;
 
 #[derive(thiserror::Error, Debug)]
 pub enum TypecheckError {
@@ -22,7 +23,11 @@ pub enum TypecheckError {
     #[error("Invalid regular expression `{0}`: {1}")]
     InvalidRegularExpression(String, regex::Error),
     #[error("Invalid type for expression `{0:?}`, expected `{1:?}` but found `{2:?}`")]
-    UnexpectedExpressionType(Expr<Syntax>, Type, Type)
+    UnexpectedExpressionType(Expr<Syntax>, Type, Type),
+    #[error("Too many arguments provided to the `count` aggregate; expected 1 but found {0}")]
+    TooManyArgumentsForCount(usize),
+    #[error("Invalid operand type for `count` aggregate; expected either a List or Relation but found `{0:?}`")]
+    InvalidOperandTypeForCount(Type),
 }
 
 struct TypeEnv {
@@ -35,8 +40,8 @@ struct TypeEnv {
 fn build_initial_type_environment(syntax : &Select<Syntax>) -> TypeEnv {
     let mut res = HashMap::new();
 
-    for decl in &syntax.var_decls {
-        res.insert(decl.name.clone(), decl.type_);
+     for decl in &syntax.var_decls {
+        res.insert(decl.name.clone(), decl.type_.clone());
     }
 
     TypeEnv {
@@ -54,7 +59,7 @@ fn typecheck_operand(method_name : &str,
                      idx : usize,
                      typed_expr : &Expr<Typed>,
                      expected_type : Type) -> anyhow::Result<Expr<Typed>> {
-    match (typed_expr.type_, expected_type) {
+    match (typed_expr.type_.clone(), expected_type) {
         (Type::PrimString, Type::Regex) => {
             // We do an implicit promotion (since there is no other way to construct these values)
             match &typed_expr.expr {
@@ -117,7 +122,7 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             let ty = env.env.get(var_name).ok_or_else(|| anyhow::anyhow!(TypecheckError::MissingVariableDeclaration(var_name.into())))?;
             Ok(Expr {
                 expr: Expr_::VarRef(var_name.into()),
-                type_: *ty
+                type_: ty.clone()
             })
         },
         Expr_::RelationalComparison(lhs, op, rhs) => {
@@ -130,10 +135,10 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             //
             // We could support lexicographic string ordering, but I'd rather
             // not until there is a need.
-            match (lhs_ty.type_, rhs_ty.type_) {
+            match (&lhs_ty.type_, &rhs_ty.type_) {
                 (Type::PrimInteger, Type::PrimInteger) => (),
                 (lt, rt) => {
-                    return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), lt, *rhs.clone(), rt)));
+                    return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), lt.clone(), *rhs.clone(), rt.clone())));
                 }
             }
 
@@ -204,7 +209,22 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             // it makes sense for "relational" values, but not really literals.
 
             let ty = match op {
-                AggregateOp::Count => Type::PrimInteger,
+                AggregateOp::Count => {
+                    // For Count, we only support a single argument that is
+                    // either a list or a relational value (which will be
+                    // evaluated as a list)
+                    if typed_exprs.len() != 1 {
+                        return Err(anyhow::anyhow!(TypecheckError::TooManyArgumentsForCount(typed_exprs.len())));
+                    }
+
+                    match &typed_exprs[0].expr.type_ {
+                        Type::List(_) => Type::PrimInteger,
+                        Type::Relational(_) => Type::PrimInteger,
+                        ty => {
+                            return Err(anyhow::anyhow!(TypecheckError::InvalidOperandTypeForCount(ty.clone())));
+                        }
+                    }
+                },
             };
 
             Ok(Expr {
@@ -221,9 +241,9 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
 
             let base_ty = typecheck_expr(env, base)?;
             let MethodIndex(method_idx) = env.type_index.get(&base_ty.type_)
-                .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidReceiverTypeForMethod(base_ty.type_, accessor.clone())))?;
+                .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidReceiverTypeForMethod(base_ty.type_.clone(), accessor.clone())))?;
             let MethodSignature(method_name, arg_types, ret_ty, _status) = method_idx.get(accessor)
-                .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidMethodForType(accessor.clone(), base_ty.type_)))?;
+                .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidMethodForType(accessor.clone(), base_ty.type_.clone())))?;
 
             if operands.len() != arg_types.len() {
                 let err = TypecheckError::InvalidArityForMethod(method_name.into(), operands.len(), arg_types.len());
@@ -240,14 +260,14 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             // the first argument to `string.regexpMatch` is actually a Regex,
             // so we can parse and promote it here.
             for (idx, operand) in typed_operands.iter().enumerate() {
-                let expected_type = arg_types[idx];
+                let expected_type = arg_types[idx].clone();
                 let typed_operand = typecheck_operand(&mname, idx, operand, expected_type)?;
                 promoted_operands.push(typed_operand);
             }
 
             Ok(Expr {
                 expr: Expr_::QualifiedAccess(Box::new(base_ty), accessor.clone(), promoted_operands),
-                type_: *ret_ty
+                type_: ret_ty.clone()
             })
         },
     }
@@ -258,7 +278,7 @@ fn typecheck_as_expr(env : &mut TypeEnv, as_expr : &AsExpr<Syntax>) -> anyhow::R
     match &as_expr.ident {
         None => {},
         Some(name) => {
-            env.env.insert(name.clone(), typed_expr.type_);
+            env.env.insert(name.clone(), typed_expr.type_.clone());
         }
     };
 

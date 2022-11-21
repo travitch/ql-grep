@@ -146,9 +146,10 @@ fn evaluate_filter(target : &source_file::SourceFile, flt : &NodeFilter, n : &tr
                     panic!("Invalid evaluation results for boolean disjuction: {:?}", lhs_e);
                 }
             }
-
-
-        }
+        },
+        NodeFilter::ArgumentListComputation(_c) => {
+            panic!("No concrete list evaluation needed yet");
+        },
     }
 }
 

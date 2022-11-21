@@ -6,10 +6,11 @@ mod errors;
 
 use std::collections::HashMap;
 
-use crate::plan::interface::{TreeInterface, NodeMatcher};
+use crate::plan::interface::{TreeInterface, NodeMatcher, FormalArgument};
 use crate::plan::java::JavaTreeInterface;
 use crate::plan::cpp::CPPTreeInterface;
-use crate::query::ir::{Repr, Typed, Expr, Expr_, Type, Constant, EqualityOp, CompOp, AggregateOp};
+use crate::query::ir::{Repr, Typed, Expr, Expr_, Constant, EqualityOp, CompOp, AggregateOp};
+use crate::query::val_type::Type;
 use crate::query;
 use crate::source_file::{Language, SourceFile};
 use crate::plan::errors::PlanError;
@@ -30,7 +31,8 @@ pub enum NodeFilter {
     StringComputation(NodeMatcher<String>),
     StringEquality(Box<NodeFilter>, EqualityOp, Box<NodeFilter>),
     LogicalConjunction(Box<NodeFilter>, Box<NodeFilter>),
-    LogicalDisjunction(Box<NodeFilter>, Box<NodeFilter>)
+    LogicalDisjunction(Box<NodeFilter>, Box<NodeFilter>),
+    ArgumentListComputation(NodeMatcher<Vec<FormalArgument>>),
 }
 
 pub struct Matching;
@@ -61,7 +63,7 @@ impl Context {
         let mut t = HashMap::new();
 
         for var_decl in query.select.var_decls.iter() {
-            t.insert(var_decl.name.clone(), var_decl.type_);
+            t.insert(var_decl.name.clone(), var_decl.type_.clone());
         }
 
         Context {
@@ -114,28 +116,24 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
                 return Err(anyhow::anyhow!(PlanError::InvalidAggregateArity(*op, exprs.len())));
             }
 
-            match (op, &exprs[0].expr.expr) {
-                (AggregateOp::Count, Expr_::QualifiedAccess(base, field, _operands)) => {
-                    // The type checker has already verified that the field
-                    // access (which is a method call) is valid based on the
-                    // supported library methods, so we don't need to
-                    // re-validate the receiver object. We will just assume that
-                    // the evaluator has suitably handled it.
-                    if field == "getAParameter" && base.type_.is_callable() {
-                        let arg_matcher = ti.callable_arguments().ok_or_else(|| PlanError::NotSupported("arguments".into(), "callable".into()))?;
-                        let arg_count_matcher = NodeMatcher {
-                            query: arg_matcher.query,
-                            extract: Box::new(move |matches, src| (arg_matcher.extract)(matches, src).len() as i32)
-                        };
-                        let flt = NodeFilter::NumericComputation(arg_count_matcher);
-                        return Ok(flt);
+            match op {
+                AggregateOp::Count => {
+                    // Count should have a single operand that evaluates to a list
+
+                    let op_f = compile_expr(ti, &exprs[0].expr)?;
+                    match op_f {
+                        NodeFilter::ArgumentListComputation(arg_matcher) => {
+                            let arg_count_matcher = NodeMatcher {
+                                query: arg_matcher.query,
+                                extract: Box::new(move |matches, src| (arg_matcher.extract)(matches, src).len() as i32)
+                            };
+                            let flt = NodeFilter::NumericComputation(arg_count_matcher);
+                            return Ok(flt);
+                        },
+                        _ => {
+                            panic!("Invalid argument to count (expected a list computation)");
+                        }
                     }
-
-                    unimplemented!();
-                },
-                _ => {
-                    unimplemented!();
-
                 }
             }
         },
@@ -144,7 +142,7 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
             // the match reasonably-sized.  We look up method implementations
             // based on the method name and the base type computed by the type
             // checker.
-            let handler = method_impl_for(base.type_, method);
+            let handler = method_impl_for(base.type_.clone(), method);
             match handler {
                 Some(Handler(f)) => {
                     let base_comp = compile_expr(ti, base)?;
@@ -202,7 +200,7 @@ pub fn build_query_plan<'a>(source : &'a SourceFile,
         },
         Expr_::VarRef(var) => {
             let ty = ctx.symbol_table.get(var).ok_or_else(|| anyhow::anyhow!(PlanError::UndeclaredVariable(var.into())))?;
-            let unsupported = PlanError::UnsupportedTypeForLanguage(*ty, source.lang);
+            let unsupported = PlanError::UnsupportedTypeForLanguage(ty.clone(), source.lang);
             let top_level = tree_interface.top_level_type(ty).ok_or_else(|| anyhow::anyhow!(unsupported))?;
             let ts_query = tree_sitter::Query::new(ast.language(), &top_level.query)?;
             let flt = match &query.select.where_formula {

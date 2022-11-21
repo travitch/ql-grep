@@ -1,3 +1,5 @@
+use crate::query::val_type::Type;
+
 /// Abstract the representation of expressions so that the same core IR can be
 /// used at multiple translation stages
 pub trait Repr
@@ -50,56 +52,6 @@ impl PartialEq for CachedRegex {
 }
 
 impl Eq for CachedRegex {}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum Type {
-    PrimInteger,
-    PrimBoolean,
-    PrimString,
-    Regex,
-    Type,
-    Class,
-    Function,
-    Method,
-    Callable,
-    Parameter,
-    Field
-}
-
-impl Type {
-    pub fn from_string(s : &str) -> Option<Type> {
-        match s {
-            "Function" => Some(Type::Function),
-            "Method" => Some(Type::Method),
-            "Class" => Some(Type::Class),
-            "Parameter" => Some(Type::Parameter),
-            "Callable" => Some(Type::Callable),
-            "Field" => Some(Type::Field),
-            "Type" => Some(Type::Type),
-            "Regex" => Some(Type::Regex),
-            "int" => Some(Type::PrimInteger),
-            "boolean" => Some(Type::PrimBoolean),
-            "string" => Some(Type::PrimString),
-            _ => None,
-        }
-    }
-
-    pub fn is_callable(&self) -> bool {
-        match self {
-            Type::Function => true,
-            Type::Method => true,
-            Type::Callable => true,
-            Type::Parameter => false,
-            Type::Field => false,
-            Type::Class => false,
-            Type::Type => false,
-            Type::Regex => false,
-            Type::PrimString => false,
-            Type::PrimInteger => false,
-            Type::PrimBoolean => false
-        }
-    }
-}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VarDecl {

@@ -2,6 +2,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
 use crate::query::ir::*;
+use crate::query::val_type::Type;
 use crate::library::Status;
 use crate::library::index::{library_index, MethodIndex, MethodSignature};
 use crate::plan::NodeFilter;
@@ -25,6 +26,14 @@ fn callable_get_name<'a>(ti : &Box<dyn TreeInterface + 'a>, _base : NodeFilter, 
     // the current language (which we don't know).
     let name_matcher = ti.callable_name().ok_or_else(|| PlanError::NotSupported("getNames".into(), "callable".into()))?;
     Ok(NodeFilter::StringComputation(name_matcher))
+}
+
+/// This is a relational method that returns a *list* of parameters
+fn callable_get_a_parameter<'a>(ti : &Box<dyn TreeInterface + 'a>, _base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
+    assert!(operands.len() == 0);
+    let arg_matcher = ti.callable_arguments()
+        .ok_or_else(|| PlanError::NotSupported("arguments".into(), "callable".into()))?;
+    Ok(NodeFilter::ArgumentListComputation(arg_matcher))
 }
 
 fn string_regexp_match<'a>(_ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
@@ -119,6 +128,10 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     impls.insert((Type::Method, "getName".into()), Handler(Box::new(callable_get_name)));
     impls.insert((Type::Function, "getName".into()), Handler(Box::new(callable_get_name)));
     impls.insert((Type::Callable, "getName".into()), Handler(Box::new(callable_get_name)));
+
+    impls.insert((Type::Method, "getAParameter".into()), Handler(Box::new(callable_get_a_parameter)));
+    impls.insert((Type::Function, "getAParameter".into()), Handler(Box::new(callable_get_a_parameter)));
+    impls.insert((Type::Callable, "getAParameter".into()), Handler(Box::new(callable_get_a_parameter)));
 
     impls.insert((Type::PrimString, "regexpMatch".into()), Handler(Box::new(string_regexp_match)));
 
