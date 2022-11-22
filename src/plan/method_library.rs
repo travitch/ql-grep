@@ -91,29 +91,22 @@ fn validate_library(impls : &HashMap<(Type, String), Handler>) {
         }
     }
 
-    // FIXME: This is commented out for now because some methods are handled
-    // specially in aggregate contexts and those are not reflected in this
-    // check.
-    //
-    // That could be fixed by actually incorporating them into this machinery
-    // and changing the evaluation of the count aggregate.
-    //
-    // for (ty, MethodIndex(method_idx)) in lib_idx {
-    //     for (method_name, MethodSignature(_name, _arg_types, _ret_type, status)) in method_idx {
-    //         // Implemented corresponds to None; in the future, this might be a
-    //         // more complex type (e.g., an ImplementedSince)
-    //         if *status == Some(Status::Unimplemented) {
-    //             continue;
-    //         }
+    for (ty, MethodIndex(method_idx)) in lib_idx {
+        for (method_name, MethodSignature(_name, _arg_types, _ret_type, status)) in method_idx {
+            // Implemented corresponds to None; in the future, this might be a
+            // more complex type (e.g., an ImplementedSince)
+            if *status == Some(Status::Unimplemented) {
+                continue;
+            }
 
-    //         match impls.get(&(*ty, method_name.into())) {
-    //             None => {
-    //                 panic!("Method `{}` for type `{:?}` is claimed to be implemented in the library, but has no implementation at runtime", method_name, ty);
-    //             },
-    //             Some(_) => {}
-    //         }
-    //     }
-    // }
+            match impls.get(&(ty.clone(), method_name.into())) {
+                None => {
+                    panic!("Method `{}` for type `{:?}` is claimed to be implemented in the library, but has no implementation at runtime", method_name, ty);
+                },
+                Some(_) => {}
+            }
+        }
+    }
 }
 
 /// Implementations of all of the methods supported by ql-grep
