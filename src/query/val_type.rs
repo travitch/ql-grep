@@ -2,7 +2,9 @@ use combine::parser::char::{string};
 use combine::{EasyParser, Parser, ParseError, Stream};
 use combine::{between, choice, parser};
 use combine::parser::combinator::attempt;
+use std::fmt;
 use std::str::FromStr;
+use thiserror::Error;
 
 /// A parser for types that are not composite
 fn basic_type_parser<Input>() -> impl Parser<Input, Output = Type>
@@ -75,8 +77,9 @@ pub enum Type {
     List(Box<Type>)
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum TypeParseError {
+    #[error("Error parsing type")]
     TypeParseError
 }
 
@@ -87,6 +90,34 @@ impl FromStr for Type {
             .easy_parse(combine::stream::position::Stream::new(s))
             .map(|res| res.0)
             .or_else(|_| Err(TypeParseError::TypeParseError))
+    }
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Type::PrimInteger => write!(f, "int"),
+            Type::PrimBoolean => write!(f, "boolean"),
+            Type::PrimString => write!(f, "string"),
+            Type::Function => write!(f, "Function"),
+            Type::Method => write!(f, "Method"),
+            Type::Callable => write!(f, "Callable"),
+            Type::Field => write!(f, "Field"),
+            Type::Parameter => write!(f, "Parameter"),
+            Type::Type => write!(f, "Type"),
+            Type::Class => write!(f, "Class"),
+            Type::Regex => write!(f, "Regex"),
+            Type::List(ty) => {
+                write!(f, "List<")?;
+                ty.fmt(f)?;
+                write!(f, ">")
+            },
+            Type::Relational(ty) => {
+                write!(f, "Relational<")?;
+                ty.fmt(f)?;
+                write!(f, ">")
+            },
+        }
     }
 }
 

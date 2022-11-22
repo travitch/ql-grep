@@ -48,16 +48,16 @@ impl FromStr for Status {
 pub struct Parameter {
     #[knuffel(argument)]
     pub name: String,
-    #[knuffel(property(name="type"))]
-    pub type_: String
+    #[knuffel(property(name="type"), str)]
+    pub type_: val_type::Type,
 }
 
 #[derive(knuffel::Decode)]
 pub struct Method {
     #[knuffel(argument)]
     pub name: String,
-    #[knuffel(property(name="type"))]
-    pub type_: String,
+    #[knuffel(property(name="type"), str)]
+    pub type_: val_type::Type,
     #[knuffel(property, str)]
     pub status: Option<Status>,
     #[knuffel(property)]
@@ -96,14 +96,14 @@ fn drop_aggregate_types(ty : val_type::Type) -> val_type::Type {
 }
 
 fn validate_parameter(seen_types : &HashSet<val_type::Type>, m : &Method, p : &Parameter) {
-    let p_ty = drop_aggregate_types(val_type::Type::from_str(&p.type_).unwrap());
+    let p_ty = drop_aggregate_types(p.type_.clone());
     if seen_types.get(&p_ty).is_none() {
         panic!("Parameter {} in {} references undefined type {}", p.name, m.name, p.type_);
     }
 }
 
 fn validate_method(seen_types : &HashSet<val_type::Type>, m : &Method) {
-    let ret_ty = drop_aggregate_types(val_type::Type::from_str(&m.type_).unwrap());
+    let ret_ty = drop_aggregate_types(m.type_.clone());
     if seen_types.get(&ret_ty).is_none() {
         panic!("Method {} references undefined type {}", m.name, m.type_);
     }
