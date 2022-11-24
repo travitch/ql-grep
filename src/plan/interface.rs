@@ -1,4 +1,5 @@
-use tree_sitter::QueryMatches;
+use tree_sitter::Node;
+use std::collections::HashMap;
 
 use crate::query::val_type::Type;
 use crate::source_file::SourceFile;
@@ -14,6 +15,91 @@ pub struct TopLevelMatcher {
     pub tag : String
 }
 
+
+/// A reference type intended to be held in NodeFilters and related types
+///
+/// The carried value is a variable name.  We use this reference type instead of
+/// holding tree sitter nodes directly because those introduce some awkward
+/// lifetime parameters everywhere in a way that is hard to manage.  This type
+/// is used as an index into a table during evaluation instead, where the table
+/// (see the `EvaluationContext`) owns the actual nodes.
+///
+/// We also don't parse every node into a full data type because it would be far
+/// too expensive.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CallableRef(String);
+
+impl CallableRef {
+    pub fn new(var_name : &str) -> Self {
+        CallableRef(var_name.into())
+    }
+}
+
+/// References to variables that can be bound to an initial tree sitter node
+///
+/// This is used to communicate the variable(s) that need to be initialized in
+/// the evaluator
+pub enum BoundNode {
+    Callable(CallableRef),
+}
+
+impl BoundNode {
+    /// Construct a BoundNode given a type
+    ///
+    /// Not everything is supported here (just what would appear in a select
+    /// clause)
+    pub fn new(name : &str, ty : &Type) -> Self {
+        match ty {
+            Type::Callable => BoundNode::Callable(CallableRef(name.into())),
+            Type::Function => BoundNode::Callable(CallableRef(name.into())),
+            Type::Method => BoundNode::Callable(CallableRef(name.into())),
+            _ => panic!("Unimplemented BoundNode type `{}`", ty)
+        }
+    }
+}
+
+/// All of the context needed during evaluation
+///
+/// These are largely tables of objects that would have lifetimes too complex to
+/// track as references, so we track them by an integer ID instead
+pub struct EvaluationContext<'a> {
+    /// All of the nodes corresponding to the Callable currently under
+    /// evaluation
+    callables: HashMap<CallableRef, Node<'a>>,
+}
+
+impl<'a> EvaluationContext<'a> {
+    pub fn new() -> Self {
+        EvaluationContext {
+            callables: HashMap::new(),
+        }
+    }
+
+    /// Retrieve the node for a `CallableRef`
+    ///
+    /// This panics if there is no corresponding map entry, as it is a
+    /// programming error
+    pub fn lookup_callable(&self, cr : &CallableRef) -> &Node<'a> {
+        self.callables.get(cr).unwrap()
+    }
+
+    pub fn bind_node(&mut self, binder : &BoundNode, n : Node<'a>) {
+        match binder {
+            BoundNode::Callable(CallableRef(name)) => {
+                self.callables.insert(CallableRef(name.into()), n);
+            },
+        }
+    }
+
+    /// Drop any bindings that are in the map
+    ///
+    /// This is meant to be used after evaluating a top-level node, as we don't
+    /// need to carry any data between nodes.
+    pub fn flush_bindings(&mut self) {
+        self.callables.clear();
+    }
+}
+
 /// An interface for providing a query and a processor for the results to
 /// produce a result of type `R`
 ///
@@ -23,10 +109,10 @@ pub struct TopLevelMatcher {
 /// FIXME: Add another field that records ranges to highlight in results (i.e.,
 /// the code that contributes to a Node being included)
 pub struct NodeMatcher<R> {
-    pub query : String,
-    pub extract : Box<dyn for <'a> Fn(QueryMatches<'a, 'a, &'a [u8]>, &'a [u8]) -> R>
+    pub extract : Box<dyn for <'a> Fn(&'a EvaluationContext<'a>, &'a [u8]) -> R>
 }
 
+/// The run-time type (i.e., something that can be returned by a NodeMatcher) for Parameters
 pub struct FormalArgument {
     pub name : String,
     pub declared_type : Option<String>
@@ -52,11 +138,11 @@ pub trait TreeInterface {
 
     /// A node matcher that extracts formal arguments from a callable node
     /// (e.g., a method or function)
-    fn callable_arguments(&self) -> Option<NodeMatcher<Vec<FormalArgument>>>;
+    fn callable_arguments(&self, node : NodeMatcher<CallableRef>) -> Option<NodeMatcher<Vec<FormalArgument>>>;
 
     /// A node matcher that extracts the name of a callable node.
     ///
     /// This is tailored to just callables because getting the name of other
     /// types of nodes requires different patterns
-    fn callable_name(&self) -> Option<NodeMatcher<String>>;
+    fn callable_name(&self, node : NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>;
 }

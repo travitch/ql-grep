@@ -35,22 +35,36 @@ impl<'a> TreeInterface for CPPTreeInterface<'a> {
         }
     }
 
-    fn callable_arguments(&self) -> Option<NodeMatcher<Vec<FormalArgument>>>
+    fn callable_arguments(&self, base : NodeMatcher<CallableRef>) -> Option<NodeMatcher<Vec<FormalArgument>>>
     {
         let matcher = NodeMatcher {
-            query: "(parameter_declaration) @parameter".into(),
-            extract: Box::new(|qms, src| qms.map(|m| parameter_node_to_argument(&m.captures[0].node, src)).collect())
+            extract: Box::new(move |ctx, source| {
+                let callable_ref = (base.extract)(ctx, source);
+                let node = ctx.lookup_callable(&callable_ref);
+                let mut cur = tree_sitter::QueryCursor::new();
+                let ql_query = "(parameter_declaration) @parameter";
+                let query = tree_sitter::Query::new(node.language(), ql_query)
+                    .unwrap_or_else(|e| panic!("Error while querying arguments {:?}", e));
+                let qms = cur.matches(&query, *node, source);
+                qms.map(|m| parameter_node_to_argument(&m.captures[0].node, source)).collect()
+            })
         };
         Some(matcher)
     }
 
-    fn callable_name(&self) -> Option<NodeMatcher<String>>
+    fn callable_name(&self, base : NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>
     {
         let matcher = NodeMatcher {
-            query: "(function_declarator (identifier) @function.name)".into(),
-            extract: Box::new(|mut qms, src| {
+            extract: Box::new(move |ctx, source| {
+                let callable_ref = (base.extract)(ctx, source);
+                let node = ctx.lookup_callable(&callable_ref);
+                let mut cur = tree_sitter::QueryCursor::new();
+                let ql_query = "(function_declarator (identifier) @function.name)";
+                let query = tree_sitter::Query::new(node.language(), ql_query)
+                    .unwrap_or_else(|e| panic!("Error while querying name {:?}", e));
+                let mut qms = cur.matches(&query, *node, source);
                 let m = qms.next().unwrap();
-                callable_name_node_to_string(&m.captures[0].node, src)
+                callable_name_node_to_string(&m.captures[0].node, source)
             })
         };
         Some(matcher)

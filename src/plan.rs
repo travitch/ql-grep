@@ -6,10 +6,10 @@ mod errors;
 
 use std::collections::HashMap;
 
-use crate::plan::interface::{TreeInterface, NodeMatcher, FormalArgument};
+use crate::plan::interface::{CallableRef, TreeInterface, NodeMatcher, FormalArgument, BoundNode};
 use crate::plan::java::JavaTreeInterface;
 use crate::plan::cpp::CPPTreeInterface;
-use crate::query::ir::{Repr, Typed, Expr, Expr_, Constant, EqualityOp, CompOp, AggregateOp};
+use crate::query::ir::{Repr, Typed, Expr, Expr_, Constant, EqualityOp, CompOp, AggregateOp, CachedRegex};
 use crate::query::val_type::Type;
 use crate::query;
 use crate::source_file::{Language, SourceFile};
@@ -17,21 +17,11 @@ use crate::plan::errors::PlanError;
 use crate::plan::method_library::{Handler, method_impl_for};
 
 pub enum NodeFilter {
-    Constant(Constant),
-    /// A reference to a variable
-    ///
-    /// Note that this is generally not used right now, but is an artifact of
-    /// the evaluation (e.g., it might refer to an abstract complex value like a
-    /// Method that has not been reduced to a constant yet)
-    VarRef(String),
     Predicate(NodeMatcher<bool>),
     NumericComputation(NodeMatcher<i32>),
-    NumericComparison(Box<NodeFilter>, CompOp, Box<NodeFilter>),
-    NumericEquality(Box<NodeFilter>, EqualityOp, Box<NodeFilter>),
     StringComputation(NodeMatcher<String>),
-    StringEquality(Box<NodeFilter>, EqualityOp, Box<NodeFilter>),
-    LogicalConjunction(Box<NodeFilter>, Box<NodeFilter>),
-    LogicalDisjunction(Box<NodeFilter>, Box<NodeFilter>),
+    RegexComputation(NodeMatcher<CachedRegex>),
+    CallableComputation(NodeMatcher<CallableRef>),
     ArgumentListComputation(NodeMatcher<Vec<FormalArgument>>),
 }
 
@@ -44,7 +34,11 @@ impl Repr for Matching {
 /// The actions that comprise a query plan
 pub enum QueryAction {
     /// A query that can be evaluated directly by the Tree Sitter engine
-    TSQuery(Option<NodeFilter>, tree_sitter::Query),
+    ///
+    /// The string is the root variable bound by the query
+    ///
+    /// This may need to be generalized in more complex cases (or that might just trigger datalog mode)
+    TSQuery(Option<NodeFilter>, tree_sitter::Query, BoundNode),
     /// A trivial result that is a constant
     ConstantValue(Constant)
 }
@@ -55,7 +49,7 @@ pub struct QueryPlan {
 }
 
 struct Context {
-    symbol_table : HashMap<String, Type>
+    symbol_table : HashMap<String, Type>,
 }
 
 impl Context {
@@ -67,7 +61,7 @@ impl Context {
         }
 
         Context {
-            symbol_table: t
+            symbol_table: t,
         }
     }
 }
@@ -80,36 +74,165 @@ fn make_tree_interface<'a>(file : &'a SourceFile) -> Box<dyn TreeInterface + 'a>
     }
 }
 
-fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> anyhow::Result<NodeFilter> {
+fn compile_expr<'a>(ti : &'a Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> anyhow::Result<NodeFilter> {
     match &e.expr {
-        Expr_::ConstantExpr(v) => Ok(NodeFilter::Constant(v.clone())),
-        Expr_::VarRef(s) => Ok(NodeFilter::VarRef(s.into())),
+        Expr_::ConstantExpr(v) => {
+            match v {
+                Constant::Boolean(b) => {
+                    let this_b = *b;
+                    let m = NodeMatcher {
+                        extract: Box::new(move |_, _| this_b)
+                    };
+                    Ok(NodeFilter::Predicate(m))
+                },
+                Constant::Integer(i) => {
+                    let this_i = *i;
+                    let m = NodeMatcher {
+                        extract: Box::new(move |_, _| this_i)
+                    };
+                    Ok(NodeFilter::NumericComputation(m))
+                },
+                Constant::String_(s) => {
+                    let this_s = s.clone();
+                    let m = NodeMatcher {
+                        extract: Box::new(move |_, _| this_s.clone())
+                    };
+                    Ok(NodeFilter::StringComputation(m))
+                },
+                Constant::Regex(cr) => {
+                    let this_cr = cr.clone();
+                    let m = NodeMatcher {
+                        extract: Box::new(move |_, _| this_cr.clone())
+                    };
+                    Ok(NodeFilter::RegexComputation(m))
+                }
+            }
+        },
+        Expr_::VarRef(s) => {
+            match &e.type_ {
+                Type::Callable | Type::Function | Type::Method => {
+                    let this_s = s.clone();
+                    let m = NodeMatcher {
+                        extract: Box::new(move |_, _| CallableRef::new(this_s.as_ref()))
+                    };
+                    Ok(NodeFilter::CallableComputation(m))
+                },
+                ty => {
+                    panic!("References to variables of type `{}` are not yet supported", ty);
+                }
+            }
+        },
         Expr_::RelationalComparison(lhs, op, rhs) => {
             let lhs_f = compile_expr(ti, lhs)?;
             let rhs_f = compile_expr(ti, rhs)?;
-            Ok(NodeFilter::NumericComparison(Box::new(lhs_f), *op, Box::new(rhs_f)))
+            match (lhs_f, rhs_f) {
+                (NodeFilter::NumericComputation(lhs_n), NodeFilter::NumericComputation(rhs_n)) => {
+                    match op {
+                        CompOp::LT => {
+                            let m = NodeMatcher {
+                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) < (rhs_n.extract)(ctx, source))
+                            };
+                            Ok(NodeFilter::Predicate(m))
+                        },
+                        CompOp::LE => {
+                            let m = NodeMatcher {
+                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) <= (rhs_n.extract)(ctx, source))
+                            };
+                            Ok(NodeFilter::Predicate(m))
+                        },
+                        CompOp::GT => {
+                            let m = NodeMatcher {
+                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) > (rhs_n.extract)(ctx, source))
+                            };
+                            Ok(NodeFilter::Predicate(m))
+                        },
+                        CompOp::GE => {
+                            let m = NodeMatcher {
+                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) >= (rhs_n.extract)(ctx, source))
+                            };
+                            Ok(NodeFilter::Predicate(m))
+                        },
+                    }
+                },
+                _ => {
+                    // The type checker should have rejected this case
+                    panic!("Impossible: relational comparison applied to unsupported type");
+                }
+            }
         },
         Expr_::EqualityComparison(lhs, op, rhs) => {
             assert!(lhs.type_ == rhs.type_);
             let lhs_f = compile_expr(ti, lhs)?;
             let rhs_f = compile_expr(ti, rhs)?;
-            match lhs.type_ {
-                Type::PrimInteger => Ok(NodeFilter::NumericEquality(Box::new(lhs_f), *op, Box::new(rhs_f))),
-                Type::PrimString => Ok(NodeFilter::StringEquality(Box::new(lhs_f), *op, Box::new(rhs_f))),
-                _ => unimplemented!()
+            match (lhs_f, rhs_f) {
+                (NodeFilter::NumericComputation(lhs_n), NodeFilter::NumericComputation(rhs_n)) => {
+                    match op {
+                        EqualityOp::EQ => {
+                            let m = NodeMatcher {
+                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) == (rhs_n.extract)(ctx, source))
+                            };
+                            Ok(NodeFilter::Predicate(m))
+                        },
+                        EqualityOp::NE => {
+                            let m = NodeMatcher {
+                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) != (rhs_n.extract)(ctx, source))
+                            };
+                            Ok(NodeFilter::Predicate(m))
+                        }
+                    }
+                },
+                (NodeFilter::StringComputation(lhs_s), NodeFilter::StringComputation(rhs_s)) => {
+                    match op {
+                        EqualityOp::EQ => {
+                            let m = NodeMatcher {
+                                extract: Box::new(move |ctx, source| (lhs_s.extract)(ctx, source) == (rhs_s.extract)(ctx, source))
+                            };
+                            Ok(NodeFilter::Predicate(m))
+                        },
+                        EqualityOp::NE => {
+                            let m = NodeMatcher {
+                                extract: Box::new(move |ctx, source| (lhs_s.extract)(ctx, source) != (rhs_s.extract)(ctx, source))
+                            };
+                            Ok(NodeFilter::Predicate(m))
+                        }
+                    }
+                },
+                _ => {
+                    panic!("Impossible equality comparison");
+                }
             }
         },
         Expr_::LogicalConjunction(lhs, rhs) => {
             assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
             let lhs_f = compile_expr(ti, lhs)?;
             let rhs_f = compile_expr(ti, rhs)?;
-            Ok(NodeFilter::LogicalConjunction(Box::new(lhs_f), Box::new(rhs_f)))
+            match (lhs_f, rhs_f) {
+                (NodeFilter::Predicate(lhs_p), NodeFilter::Predicate(rhs_p)) => {
+                    let m = NodeMatcher {
+                        extract: Box::new(move |ctx, source| (lhs_p.extract)(ctx, source) && (rhs_p.extract)(ctx, source))
+                    };
+                    Ok(NodeFilter::Predicate(m))
+                },
+                _ => {
+                    panic!("Impossible logical conjunction types");
+                }
+            }
         },
         Expr_::LogicalDisjunction(lhs, rhs) => {
             assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
             let lhs_f = compile_expr(ti, lhs)?;
             let rhs_f = compile_expr(ti, rhs)?;
-            Ok(NodeFilter::LogicalDisjunction(Box::new(lhs_f), Box::new(rhs_f)))
+            match (lhs_f, rhs_f) {
+                (NodeFilter::Predicate(lhs_p), NodeFilter::Predicate(rhs_p)) => {
+                    let m = NodeMatcher {
+                        extract: Box::new(move |ctx, source| (lhs_p.extract)(ctx, source) || (rhs_p.extract)(ctx, source))
+                    };
+                    Ok(NodeFilter::Predicate(m))
+                },
+                _ => {
+                    panic!("Impossible logical disjunction types");
+                }
+            }
         },
         Expr_::Aggregate(op, exprs) => {
             if exprs.len() != 1 {
@@ -124,11 +247,9 @@ fn compile_expr<'a>(ti : &Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> a
                     match op_f {
                         NodeFilter::ArgumentListComputation(arg_matcher) => {
                             let arg_count_matcher = NodeMatcher {
-                                query: arg_matcher.query,
-                                extract: Box::new(move |matches, src| (arg_matcher.extract)(matches, src).len() as i32)
+                                extract: Box::new(move |ctx, source| (arg_matcher.extract)(ctx, source).len() as i32)
                             };
-                            let flt = NodeFilter::NumericComputation(arg_count_matcher);
-                            return Ok(flt);
+                            return Ok(NodeFilter::NumericComputation(arg_count_matcher));
                         },
                         _ => {
                             panic!("Invalid argument to count (expected a list computation)");
@@ -210,8 +331,9 @@ pub fn build_query_plan<'a>(source : &'a SourceFile,
                     anyhow::Ok(Some(flt))
                 }
             }?;
+            let bound_node = BoundNode::new(var, ty);
             let p = QueryPlan {
-                steps: QueryAction::TSQuery(flt, ts_query)
+                steps: QueryAction::TSQuery(flt, ts_query, bound_node)
             };
             Ok(p)
         },

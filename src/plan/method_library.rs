@@ -20,20 +20,35 @@ use crate::plan::interface::{NodeMatcher, TreeInterface};
 /// The callback returns a node filter that is suitable for evaluating the method call
 pub struct Handler(pub Box<dyn for <'a> Fn(&'a Box<dyn TreeInterface + 'a>, NodeFilter, &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> + Send + Sync>);
 
-fn callable_get_name<'a>(ti : &Box<dyn TreeInterface + 'a>, _base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
+fn callable_get_name<'a>(ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     // This is not necessarily an assertion, as this may not be supported for
     // the current language (which we don't know).
-    let name_matcher = ti.callable_name().ok_or_else(|| PlanError::NotSupported("getNames".into(), "callable".into()))?;
-    Ok(NodeFilter::StringComputation(name_matcher))
+    match base {
+        NodeFilter::CallableComputation(callable_matcher) => {
+            let name_matcher = ti.callable_name(callable_matcher)
+                .ok_or_else(|| PlanError::NotSupported("getNames".into(), "callable".into()))?;
+            Ok(NodeFilter::StringComputation(name_matcher))
+        },
+        _ => {
+            panic!("Implementation error: only a callable should be possible here");
+        }
+    }
 }
 
 /// This is a relational method that returns a *list* of parameters
-fn callable_get_a_parameter<'a>(ti : &Box<dyn TreeInterface + 'a>, _base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
-    assert!(operands.len() == 0);
-    let arg_matcher = ti.callable_arguments()
-        .ok_or_else(|| PlanError::NotSupported("arguments".into(), "callable".into()))?;
-    Ok(NodeFilter::ArgumentListComputation(arg_matcher))
+fn callable_get_a_parameter<'a>(ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::CallableComputation(callable_matcher) => {
+            let arg_matcher = ti.callable_arguments(callable_matcher)
+                .ok_or_else(|| PlanError::NotSupported("arguments".into(), "callable".into()))?;
+            Ok(NodeFilter::ArgumentListComputation(arg_matcher))
+        },
+        _ => {
+            panic!("Implementation error: only a callable should be possible here");
+        }
+    }
 }
 
 fn string_regexp_match<'a>(_ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
@@ -52,9 +67,8 @@ fn string_regexp_match<'a>(_ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter
         }
     };
     let comp = NodeMatcher {
-        query: c.query,
-        extract: Box::new(move |matches, src| {
-                    let matched_string = (c.extract)(matches, src);
+        extract: Box::new(move |ctx, source| {
+                    let matched_string = (c.extract)(ctx, source);
                     rx.is_match(matched_string.as_ref())
                 })
     };

@@ -1,7 +1,8 @@
 use tree_sitter;
 
 use crate::plan::{NodeFilter, QueryAction, QueryPlan};
-use crate::query::ir::{EqualityOp, CompOp, Constant};
+use crate::plan::interface::EvaluationContext;
+use crate::query::ir::Constant;
 use crate::source_file;
 
 #[derive(Debug)]
@@ -27,149 +28,53 @@ enum Value {
 /// This is currently set up as a very naive interpreter. In the future, the
 /// query planner could embed some of the numeric and logical computations into
 /// the individual filters to reduce the evaluation cost.
-fn evaluate_filter(target : &source_file::SourceFile, flt : &NodeFilter, n : &tree_sitter::Node) -> anyhow::Result<Value> {
+fn evaluate_filter(target : &source_file::SourceFile, ctx : &mut EvaluationContext, flt : &NodeFilter) -> anyhow::Result<Value> {
     match flt {
-        NodeFilter::Constant(k) => {
-            Ok(Value::Constant(k.clone()))
-        },
-        NodeFilter::VarRef(v) => {
-            panic!("Unexpected evaluation of a `VarRef` of {}", v);
-        },
         NodeFilter::Predicate(nm) => {
-            let mut cur = tree_sitter::QueryCursor::new();
-            let query = tree_sitter::Query::new(n.language(), nm.query.as_ref())?;
-            let matches = cur.matches(&query, *n, target.source.as_bytes());
-            let b = (nm.extract)(matches, target.source.as_bytes());
+            let b = (nm.extract)(ctx, target.source.as_bytes());
             Ok(Value::Constant(Constant::Boolean(b)))
         },
         NodeFilter::NumericComputation(nm) => {
-            let mut cur = tree_sitter::QueryCursor::new();
-            let query = tree_sitter::Query::new(n.language(), nm.query.as_ref())?;
-            let matches = cur.matches(&query, *n, target.source.as_bytes());
-            let i = (nm.extract)(matches, target.source.as_bytes());
+            let i = (nm.extract)(ctx, target.source.as_bytes());
             Ok(Value::Constant(Constant::Integer(i)))
         },
-        NodeFilter::NumericComparison(lhs, op, rhs) => {
-            let lhs_e = evaluate_filter(target, lhs, n)?;
-            let rhs_e = evaluate_filter(target, rhs, n)?;
-            match (&lhs_e, &rhs_e) {
-                (Value::Constant(Constant::Integer(lhs_i)), Value::Constant(Constant::Integer(rhs_i))) => {
-                    let res = match op {
-                        CompOp::LT => lhs_i < rhs_i,
-                        CompOp::LE => lhs_i <= rhs_i,
-                        CompOp::GT => lhs_i > rhs_i,
-                        CompOp::GE => lhs_i >= rhs_i,
-                    };
-                    Ok(Value::Constant(Constant::Boolean(res)))
-                }
-                _ => {
-                    // Also an implementation error, as the query planner should
-                    // render this impossible
-                    panic!("Invalid evaluation results for numeric comparison: {:?} and {:?}", lhs_e, rhs_e);
-                }
-            }
-        },
-        NodeFilter::NumericEquality(lhs, op, rhs) => {
-            let lhs_e = evaluate_filter(target, lhs, n)?;
-            let rhs_e = evaluate_filter(target, rhs, n)?;
-            match (&lhs_e, &rhs_e) {
-                (Value::Constant(Constant::Integer(lhs_i)), Value::Constant(Constant::Integer(rhs_i))) => {
-                    let res = match op {
-                        EqualityOp::EQ => lhs_i == rhs_i,
-                        EqualityOp::NE => lhs_i != rhs_i
-                    };
-                    Ok(Value::Constant(Constant::Boolean(res)))
-                }
-                _ => {
-                    // Also an implementation error, as the query planner should
-                    // render this impossible
-                    panic!("Invalid evaluation results for numeric comparison: {:?} and {:?}", lhs_e, rhs_e);
-                }
-            }
-        },
         NodeFilter::StringComputation(nm) => {
-            let mut cur = tree_sitter::QueryCursor::new();
-            let query = tree_sitter::Query::new(n.language(), nm.query.as_ref())?;
-            let matches = cur.matches(&query, *n, target.source.as_bytes());
-            let s = (nm.extract)(matches, target.source.as_bytes());
+            let s = (nm.extract)(ctx, target.source.as_bytes());
             Ok(Value::Constant(Constant::String_(s)))
-        },
-        NodeFilter::StringEquality(lhs, op, rhs) => {
-            let lhs_e = evaluate_filter(target, lhs, n)?;
-            let rhs_e = evaluate_filter(target, rhs, n)?;
-            match (&lhs_e, &rhs_e) {
-                (Value::Constant(Constant::String_(lhs_s)), Value::Constant(Constant::String_(rhs_s))) => {
-                    let res = match op {
-                        EqualityOp::EQ => lhs_s == rhs_s,
-                        EqualityOp::NE => lhs_s != rhs_s
-                    };
-                    Ok(Value::Constant(Constant::Boolean(res)))
-                }
-                _ => {
-                    // Also an implementation error, as the query planner should
-                    // render this impossible
-                    panic!("Invalid evaluation results for string comparison: {:?} and {:?}", lhs_e, rhs_e);
-                }
-            }
-        },
-        NodeFilter::LogicalConjunction(lhs, rhs) => {
-            let lhs_e = evaluate_filter(target, lhs, n)?;
-            let rhs_e = evaluate_filter(target, rhs, n)?;
-            match (&lhs_e, &rhs_e) {
-                (Value::Constant(Constant::Boolean(b1)), Value::Constant(Constant::Boolean(b2))) => {
-                    Ok(Value::Constant(Constant::Boolean(*b1 && *b2)))
-                },
-                _ => {
-                    panic!("Invalid evaluation results for logical conjunction: {:?} and {:?}", lhs_e, rhs_e);
-                }
-            }
-        },
-        NodeFilter::LogicalDisjunction(lhs, rhs) => {
-            let lhs_e = evaluate_filter(target, lhs, n)?;
-            match &lhs_e {
-                Value::Constant(Constant::Boolean(b1)) => {
-                    if *b1 {
-                        Ok(Value::Constant(Constant::Boolean(true)))
-                    } else {
-                        let rhs_e = evaluate_filter(target, rhs, n)?;
-                        match &rhs_e {
-                            Value::Constant(Constant::Boolean(b2)) => {
-                                Ok(Value::Constant(Constant::Boolean(*b2)))
-                            },
-                            _ => {
-                                panic!("Invalid evaluation results for boolean disjuction: {:?}", rhs_e);
-                            }
-                        }
-                    }
-                },
-                _ => {
-                    panic!("Invalid evaluation results for boolean disjuction: {:?}", lhs_e);
-                }
-            }
         },
         NodeFilter::ArgumentListComputation(_c) => {
             panic!("No concrete list evaluation needed yet");
         },
+        NodeFilter::CallableComputation(_c) => {
+            panic!("Not evaluating callables yet");
+        },
+        NodeFilter::RegexComputation(_c) => {
+            panic!("Not evaluating regexes yet");
+        },
     }
 }
+
+// FIXME: During evaluation, flush any nodes that don't satisfy their predicate from the evaluation context
 
 pub fn evaluate_plan<'a>(target : &'a source_file::SourceFile,
                          ast : &'a tree_sitter::Tree,
                          cursor : &'a mut tree_sitter::QueryCursor,
                          plan : &'a QueryPlan) -> anyhow::Result<Vec<QueryResult>> {
     // FIXME: Add rich error reporting here, with supportive logging in the main driver that consumes these results
+    let mut eval_ctx = EvaluationContext::new();
     let mut matches = Vec::new();
     match &plan.steps {
         QueryAction::ConstantValue(v) => {
             matches.push(QueryResult::Constant(v.clone()));
         },
-        QueryAction::TSQuery(flt, q) => {
+        QueryAction::TSQuery(flt, q, root_var) => {
             for qm in cursor.matches(q, ast.root_node(), target.source.as_bytes()) {
                 let accept_node = {
                     match &flt {
                         None => true,
                         Some(f) => {
-                            let res = evaluate_filter(target, f, &qm.captures[0].node)?;
+                            eval_ctx.bind_node(root_var, qm.captures[0].node);
+                            let res = evaluate_filter(target, &mut eval_ctx, f)?;
                             match res {
                                 Value::Constant(Constant::Boolean(b)) => b,
                                 Value::Constant(_) => {
@@ -187,6 +92,11 @@ pub fn evaluate_plan<'a>(target : &'a source_file::SourceFile,
                     let str_range = qm.captures[0].node.range();
                     matches.push(QueryResult::Node(str_range));
                 }
+
+                // FIXME: It might be better to wrap the context in some kind of
+                // block that makes it easy to remove all bindings that we
+                // introduced.
+                eval_ctx.flush_bindings();
             }
         }
     }
