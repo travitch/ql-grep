@@ -78,17 +78,18 @@ fn callable_name_node_to_string(n : &Node, src : & [u8]) -> String {
     n.utf8_text(src).unwrap().into()
 }
 
+fn parse_type_node<'a>(n : &'a Node, src : &'a [u8]) -> LanguageType {
+    LanguageType::new(n.utf8_text(src).unwrap())
+}
+
 fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgument {
-    // FIXME: Rearrange the types to enable clean error handling (i.e., add a Result to the return)
-    //
-    // It seems like this should be impossible if the parser is correct
-    let ident_node = n.child(1).unwrap();
+    let ty_node = n.child_by_field_name("type").unwrap();
+    let ty = parse_type_node(&ty_node, src);
+    let ident_node = n.child_by_field_name("name").unwrap();
     let ident = ident_node.utf8_text(src).unwrap();
 
-    let type_node = n.child(0).unwrap();
-    let ty = type_node.utf8_text(src).unwrap();
     FormalArgument {
-        name: ident.into(),
+        name: Some(ident.into()),
         declared_type: Some(ty.into())
     }
 }

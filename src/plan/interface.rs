@@ -112,10 +112,31 @@ pub struct NodeMatcher<R> {
     pub extract : Box<dyn for <'a> Fn(&'a EvaluationContext<'a>, &'a [u8]) -> R>
 }
 
+/// A representation of language-level types (e.g., Java or C types)
+///
+/// This is a type for clarity in the data model. For now it is just a `String`,
+/// but eventually we will probably want more structure
+pub struct LanguageType(String);
+
+impl LanguageType {
+    pub fn new(name : &str) -> Self {
+        LanguageType(name.into())
+    }
+
+    pub fn as_type_string(&self) -> String {
+        self.0.clone()
+    }
+}
+
 /// The run-time type (i.e., something that can be returned by a NodeMatcher) for Parameters
+///
+/// Note that the name is optional because some languages allow unnamed
+/// arguments to indicate that they are unused (e.g., C).
+///
+/// The type is optional because some languages are untyped.
 pub struct FormalArgument {
-    pub name : String,
-    pub declared_type : Option<String>
+    pub name : Option<String>,
+    pub declared_type : Option<LanguageType>
 }
 
 /// The interface for generating tree matchers for each language

@@ -75,38 +75,97 @@ fn callable_name_node_to_string(n : &Node, src : & [u8]) -> String {
     n.utf8_text(src).unwrap().into()
 }
 
+/// Parse any `type` node in the tree-sitter AST for C/C++
+///
+/// NOTE: For now this just captures the string representation of the
+/// type. Eventually we will probably want a structured representation. If we
+/// do, it will need to be language-specific, so we would need language-specific
+/// storage in the evaluation context.
+///
+/// This takes an optional declarator to enable us to capture pointer types and
+/// modify the textual type, as the tree-sitter parser splits the pointer
+/// declarator out.
+fn parse_type_node<'a>(decl : &Option<Declarator>, n : &'a Node, src : &'a [u8]) -> LanguageType {
+    let mut s = String::new();
+
+    s.push_str(n.utf8_text(src).unwrap());
+
+    decl.as_ref().map(|d| {
+        d.append_declarators(&mut s);
+    });
+
+    LanguageType::new(&s)
+}
+
+enum Declarator {
+    Pointer(Box<Declarator>),
+    Array(Box<Declarator>),
+    Function(Box<Declarator>),
+    Ident(String)
+}
+
+impl Declarator {
+    fn type_name(&self) -> &str {
+        match self {
+            Declarator::Ident(s) => s,
+            Declarator::Array(a) => a.type_name(),
+            // FIXME: Can do better here
+            Declarator::Function(_) => "function-pointer",
+            Declarator::Pointer(d) => d.type_name(),
+        }
+    }
+
+    fn append_declarators(&self, s : &mut String) {
+        match self {
+            Declarator::Ident(_) => {},
+            Declarator::Pointer(d) => {
+                s.push('*');
+                d.append_declarators(s);
+            },
+            Declarator::Function(_) => {
+                // FIXME
+                s.push_str("function-pointer");
+            },
+            Declarator::Array(d) => {
+                s.push_str("[]");
+                d.append_declarators(s);
+            },
+        }
+    }
+}
+
+fn parse_declarator<'a>(n : &'a Node, src : &'a [u8]) -> Declarator {
+    // This node can either be an identifier (the name of the declarator) or a
+    // pointer wrapper
+    match n.kind() {
+        "identifier" => Declarator::Ident(n.utf8_text(src).unwrap().into()),
+        "array_declarator" => {
+            let next_child = n.child_by_field_name("declarator").unwrap();
+            Declarator::Array(Box::new(parse_declarator(&next_child, src)))
+        },
+        "pointer_declarator" => {
+            let next_child = n.child_by_field_name("declarator").unwrap();
+            Declarator::Pointer(Box::new(parse_declarator(&next_child, src)))
+        },
+        "function_declarator" => {
+            // This is a parenthesized declarator that we can skip for now
+            let next_child = n.child_by_field_name("declarator").unwrap();
+            println!("next after function decl: {:?}", next_child);
+            let next_child = next_child.child_by_field_name("declarator").unwrap();
+            Declarator::Function(Box::new(parse_declarator(&next_child, src)))
+        },
+        k => {
+            panic!("Unsupported C/C++ declarator type `{}`", k);
+        }
+    }
+}
+
 fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgument {
-    if n.child_count() == 1 {
-        // In this case, it is just an unused argument with a type and no name
-        let type_node = n.child(0).unwrap();
-        let ty = type_node.utf8_text(src).unwrap();
-        FormalArgument {
-            name: "".into(), // FIXME: Change this type
-            declared_type: Some(ty.into())
-        }
-    } else if n.child_count() == 2 {
-        // FIXME: Rearrange the types to enable clean error handling (i.e., add a Result to the return)
-        let ident_node = n.child(1).unwrap();
-        let ident = ident_node.utf8_text(src).unwrap();
-
-        let type_node = n.child(0).unwrap();
-        let ty = type_node.utf8_text(src).unwrap();
-        FormalArgument {
-            name: ident.into(),
-            declared_type: Some(ty.into())
-        }
-    } else if n.child_count() == 3 {
-        // FIXME: Capture qualifiers
-        let ident_node = n.child(2).unwrap();
-        let ident = ident_node.utf8_text(src).unwrap();
-
-        let type_node = n.child(1).unwrap();
-        let ty = type_node.utf8_text(src).unwrap();
-        FormalArgument {
-            name: ident.into(),
-            declared_type: Some(ty.into())
-        }
-    } else {
-        panic!("Unknown argument structure with {} children", n.child_count());
+    let decl = n.child_by_field_name("declarator").map(|n| parse_declarator(&n, src));
+    let ty_node = n.child_by_field_name("type");
+    let ty = ty_node.map(|s| parse_type_node(&decl, &s, src));
+    FormalArgument {
+        name: decl.map(|d| d.type_name().into()),
+        declared_type: ty
     }
 }

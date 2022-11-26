@@ -9,7 +9,7 @@ use crate::query::val_type::Type;
 ///
 /// We need to use this to be robust against comments appearing as children of
 /// any node, which would throw off any indexing.
-fn get_child_of_kind<'a>(node : tree_sitter::Node<'a>, target_kind : &'static str) -> anyhow::Result<tree_sitter::Node<'a>> {
+pub fn get_child_of_kind<'a>(node : tree_sitter::Node<'a>, target_kind : &'static str) -> anyhow::Result<tree_sitter::Node<'a>> {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if child.kind() == target_kind {
