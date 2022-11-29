@@ -1,6 +1,7 @@
 use std::rc::Rc;
 use tree_sitter::Node;
 
+use crate::query::parser::get_child_of_kind;
 use crate::query::val_type::Type;
 use crate::plan::interface::*;
 use crate::source_file::SourceFile;
@@ -98,6 +99,7 @@ enum Declarator {
     Pointer(Box<Declarator>),
     Array(Box<Declarator>),
     Function(Box<Declarator>),
+    Unnamed,
     Ident(String)
 }
 
@@ -109,6 +111,7 @@ impl Declarator {
             // FIXME: Can do better here
             Declarator::Function(_) => "function-pointer",
             Declarator::Pointer(d) => d.type_name(),
+            Declarator::Unnamed => "<unnamed>",
         }
     }
 
@@ -127,6 +130,7 @@ impl Declarator {
                 s.push_str("[]");
                 d.append_declarators(s);
             },
+            Declarator::Unnamed => {},
         }
     }
 }
@@ -147,9 +151,21 @@ fn parse_declarator<'a>(n : &'a Node, src : &'a [u8]) -> Declarator {
         "function_declarator" => {
             // This is a parenthesized declarator that we can skip for now
             let next_child = n.child_by_field_name("declarator").unwrap();
-            println!("next after function decl: {:?}", next_child);
-            let next_child = next_child.child_by_field_name("declarator").unwrap();
+            let next_child = get_child_of_kind(next_child, "pointer_declarator").unwrap();
             Declarator::Function(Box::new(parse_declarator(&next_child, src)))
+        },
+        "abstract_pointer_declarator" => {
+            Declarator::Unnamed
+        },
+        "abstract_function_declarator" => {
+            Declarator::Unnamed
+        },
+        "abstract_array_declarator" => {
+            Declarator::Unnamed
+        },
+        "parenthesized_declarator" => {
+            // FIXME: Figure out what this actually is
+            Declarator::Unnamed
         },
         k => {
             panic!("Unsupported C/C++ declarator type `{}`", k);
