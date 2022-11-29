@@ -29,7 +29,7 @@ lazy_static! {
         let c_lang = unsafe { tree_sitter_c() };
         let cpp_lang = unsafe { tree_sitter_cpp() };
         let java_lang = unsafe { tree_sitter_java() };
-        let python_lang = unsafe { tree_sitter_python() };
+        // let python_lang = unsafe { tree_sitter_python() };
 
         let mut m = HashMap::new();
         m.insert("c".into(), (c_lang, Language::CPP));
@@ -42,7 +42,7 @@ lazy_static! {
         m.insert("hxx".into(), (cpp_lang, Language::CPP));
         m.insert("h".into(), (cpp_lang, Language::CPP));
         m.insert("java".into(), (java_lang, Language::Java));
-        m.insert("py".into(), (python_lang, Language::Python));
+        // m.insert("py".into(), (python_lang, Language::Python));
         m
     };
 }
@@ -50,7 +50,7 @@ lazy_static! {
 extern "C" { fn tree_sitter_c() -> tree_sitter::Language; }
 extern "C" { fn tree_sitter_cpp() -> tree_sitter::Language; }
 extern "C" { fn tree_sitter_java() -> tree_sitter::Language; }
-extern "C" { fn tree_sitter_python() -> tree_sitter::Language; }
+// extern "C" { fn tree_sitter_python() -> tree_sitter::Language; }
 
 
 pub struct SourceFile {
