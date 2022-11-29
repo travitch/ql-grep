@@ -5,6 +5,7 @@ mod method_library;
 mod errors;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::plan::interface::{CallableRef, TreeInterface, NodeMatcher, FormalArgument, BoundNode};
 use crate::plan::java::JavaTreeInterface;
@@ -18,10 +19,13 @@ use crate::plan::method_library::{Handler, method_impl_for};
 
 pub enum NodeFilter {
     Predicate(NodeMatcher<bool>),
+    PredicateListComputation(NodeMatcher<Vec<bool>>),
     NumericComputation(NodeMatcher<i32>),
     StringComputation(NodeMatcher<String>),
+    StringListComputation(NodeMatcher<Vec<String>>),
     RegexComputation(NodeMatcher<CachedRegex>),
     CallableComputation(NodeMatcher<CallableRef>),
+    ArgumentComputation(NodeMatcher<FormalArgument>),
     ArgumentListComputation(NodeMatcher<Vec<FormalArgument>>),
 }
 
@@ -66,54 +70,56 @@ impl Context {
     }
 }
 
-fn make_tree_interface<'a>(file : &'a SourceFile) -> Box<dyn TreeInterface + 'a> {
+fn make_tree_interface(file : &SourceFile) -> Rc<dyn TreeInterface> {
     match file.lang {
-        Language::CPP => Box::new(CPPTreeInterface::new(file)) as Box<dyn TreeInterface>,
-        Language::Java => Box::new(JavaTreeInterface::new(file)) as Box<dyn TreeInterface>,
+        Language::CPP => Rc::new(CPPTreeInterface::new(file)) as Rc<dyn TreeInterface>,
+        Language::Java => Rc::new(JavaTreeInterface::new(file)) as Rc<dyn TreeInterface>,
         Language::Python => unimplemented!()
     }
 }
 
-fn compile_expr<'a>(ti : &'a Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -> anyhow::Result<NodeFilter> {
+fn compile_expr<'a>(ti : Rc<dyn TreeInterface>, e : &'a Expr<Typed>) -> anyhow::Result<NodeFilter> {
     match &e.expr {
         Expr_::ConstantExpr(v) => {
             match v {
                 Constant::Boolean(b) => {
                     let this_b = *b;
                     let m = NodeMatcher {
-                        extract: Box::new(move |_, _| this_b)
+                        extract: Rc::new(move |_, _| this_b)
                     };
                     Ok(NodeFilter::Predicate(m))
                 },
                 Constant::Integer(i) => {
                     let this_i = *i;
                     let m = NodeMatcher {
-                        extract: Box::new(move |_, _| this_i)
+                        extract: Rc::new(move |_, _| this_i)
                     };
                     Ok(NodeFilter::NumericComputation(m))
                 },
                 Constant::String_(s) => {
                     let this_s = s.clone();
                     let m = NodeMatcher {
-                        extract: Box::new(move |_, _| this_s.clone())
+                        extract: Rc::new(move |_, _| this_s.clone())
                     };
                     Ok(NodeFilter::StringComputation(m))
                 },
                 Constant::Regex(cr) => {
                     let this_cr = cr.clone();
                     let m = NodeMatcher {
-                        extract: Box::new(move |_, _| this_cr.clone())
+                        extract: Rc::new(move |_, _| this_cr.clone())
                     };
                     Ok(NodeFilter::RegexComputation(m))
                 }
             }
         },
         Expr_::VarRef(s) => {
+            // This case covers all references to variables declared in the From
+            // clause of the query
             match &e.type_ {
                 Type::Callable | Type::Function | Type::Method => {
                     let this_s = s.clone();
                     let m = NodeMatcher {
-                        extract: Box::new(move |_, _| CallableRef::new(this_s.as_ref()))
+                        extract: Rc::new(move |_, _| CallableRef::new(this_s.as_ref()))
                     };
                     Ok(NodeFilter::CallableComputation(m))
                 },
@@ -123,32 +129,32 @@ fn compile_expr<'a>(ti : &'a Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -
             }
         },
         Expr_::RelationalComparison(lhs, op, rhs) => {
-            let lhs_f = compile_expr(ti, lhs)?;
-            let rhs_f = compile_expr(ti, rhs)?;
+            let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
+            let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
             match (lhs_f, rhs_f) {
                 (NodeFilter::NumericComputation(lhs_n), NodeFilter::NumericComputation(rhs_n)) => {
                     match op {
                         CompOp::LT => {
                             let m = NodeMatcher {
-                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) < (rhs_n.extract)(ctx, source))
+                                extract: Rc::new(move |ctx, source| (lhs_n.extract)(ctx, source) < (rhs_n.extract)(ctx, source))
                             };
                             Ok(NodeFilter::Predicate(m))
                         },
                         CompOp::LE => {
                             let m = NodeMatcher {
-                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) <= (rhs_n.extract)(ctx, source))
+                                extract: Rc::new(move |ctx, source| (lhs_n.extract)(ctx, source) <= (rhs_n.extract)(ctx, source))
                             };
                             Ok(NodeFilter::Predicate(m))
                         },
                         CompOp::GT => {
                             let m = NodeMatcher {
-                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) > (rhs_n.extract)(ctx, source))
+                                extract: Rc::new(move |ctx, source| (lhs_n.extract)(ctx, source) > (rhs_n.extract)(ctx, source))
                             };
                             Ok(NodeFilter::Predicate(m))
                         },
                         CompOp::GE => {
                             let m = NodeMatcher {
-                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) >= (rhs_n.extract)(ctx, source))
+                                extract: Rc::new(move |ctx, source| (lhs_n.extract)(ctx, source) >= (rhs_n.extract)(ctx, source))
                             };
                             Ok(NodeFilter::Predicate(m))
                         },
@@ -161,21 +167,20 @@ fn compile_expr<'a>(ti : &'a Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -
             }
         },
         Expr_::EqualityComparison(lhs, op, rhs) => {
-            assert!(lhs.type_ == rhs.type_);
-            let lhs_f = compile_expr(ti, lhs)?;
-            let rhs_f = compile_expr(ti, rhs)?;
+            let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
+            let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
             match (lhs_f, rhs_f) {
                 (NodeFilter::NumericComputation(lhs_n), NodeFilter::NumericComputation(rhs_n)) => {
                     match op {
                         EqualityOp::EQ => {
                             let m = NodeMatcher {
-                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) == (rhs_n.extract)(ctx, source))
+                                extract: Rc::new(move |ctx, source| (lhs_n.extract)(ctx, source) == (rhs_n.extract)(ctx, source))
                             };
                             Ok(NodeFilter::Predicate(m))
                         },
                         EqualityOp::NE => {
                             let m = NodeMatcher {
-                                extract: Box::new(move |ctx, source| (lhs_n.extract)(ctx, source) != (rhs_n.extract)(ctx, source))
+                                extract: Rc::new(move |ctx, source| (lhs_n.extract)(ctx, source) != (rhs_n.extract)(ctx, source))
                             };
                             Ok(NodeFilter::Predicate(m))
                         }
@@ -185,15 +190,57 @@ fn compile_expr<'a>(ti : &'a Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -
                     match op {
                         EqualityOp::EQ => {
                             let m = NodeMatcher {
-                                extract: Box::new(move |ctx, source| (lhs_s.extract)(ctx, source) == (rhs_s.extract)(ctx, source))
+                                extract: Rc::new(move |ctx, source| (lhs_s.extract)(ctx, source) == (rhs_s.extract)(ctx, source))
                             };
                             Ok(NodeFilter::Predicate(m))
                         },
                         EqualityOp::NE => {
                             let m = NodeMatcher {
-                                extract: Box::new(move |ctx, source| (lhs_s.extract)(ctx, source) != (rhs_s.extract)(ctx, source))
+                                extract: Rc::new(move |ctx, source| (lhs_s.extract)(ctx, source) != (rhs_s.extract)(ctx, source))
                             };
                             Ok(NodeFilter::Predicate(m))
+                        }
+                    }
+                },
+                (NodeFilter::StringListComputation(lhs_s), NodeFilter::StringComputation(rhs_s)) => {
+                    match op {
+                        EqualityOp::EQ => {
+                            let rhs_fn = Rc::clone(&rhs_s.extract);
+                            let lifted = transform_node_filter(Type::PrimBoolean, &NodeFilter::StringListComputation(lhs_s), Rc::new(move |elt : Rc<NodeFilter>| {
+                                let rhs_fn_ref = Rc::clone(&rhs_fn);
+                                match &*elt {
+                                    NodeFilter::StringComputation(sc) => {
+                                        let sc_ref = Rc::clone(&sc.extract);
+                                        let m = NodeMatcher {
+                                            extract: Rc::new(move |ctx, source| sc_ref(ctx, source) == rhs_fn_ref(ctx, source))
+                                        };
+                                        Ok(NodeFilter::Predicate(m))
+                                    },
+                                    _ => {
+                                        panic!("Invalid branch, expected a string computation")
+                                    }
+                                }
+                            }))?;
+                            Ok(lifted)
+                        },
+                        EqualityOp::NE => {
+                            let rhs_fn = Rc::clone(&rhs_s.extract);
+                            let lifted = transform_node_filter(Type::PrimBoolean, &NodeFilter::StringListComputation(lhs_s), Rc::new(move |elt : Rc<NodeFilter>| {
+                                let rhs_fn_ref = Rc::clone(&rhs_fn);
+                                match &*elt {
+                                    NodeFilter::StringComputation(sc) => {
+                                        let sc_ref = Rc::clone(&sc.extract);
+                                        let m = NodeMatcher {
+                                            extract: Rc::new(move |ctx, source| sc_ref(ctx, source) != rhs_fn_ref(ctx, source))
+                                        };
+                                        Ok(NodeFilter::Predicate(m))
+                                    },
+                                    _ => {
+                                        panic!("Invalid branch, expected a string computation")
+                                    }
+                                }
+                            }))?;
+                            Ok(lifted)
                         }
                     }
                 },
@@ -204,12 +251,12 @@ fn compile_expr<'a>(ti : &'a Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -
         },
         Expr_::LogicalConjunction(lhs, rhs) => {
             assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
-            let lhs_f = compile_expr(ti, lhs)?;
-            let rhs_f = compile_expr(ti, rhs)?;
+            let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
+            let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
             match (lhs_f, rhs_f) {
                 (NodeFilter::Predicate(lhs_p), NodeFilter::Predicate(rhs_p)) => {
                     let m = NodeMatcher {
-                        extract: Box::new(move |ctx, source| (lhs_p.extract)(ctx, source) && (rhs_p.extract)(ctx, source))
+                        extract: Rc::new(move |ctx, source| (lhs_p.extract)(ctx, source) && (rhs_p.extract)(ctx, source))
                     };
                     Ok(NodeFilter::Predicate(m))
                 },
@@ -220,12 +267,12 @@ fn compile_expr<'a>(ti : &'a Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -
         },
         Expr_::LogicalDisjunction(lhs, rhs) => {
             assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
-            let lhs_f = compile_expr(ti, lhs)?;
-            let rhs_f = compile_expr(ti, rhs)?;
+            let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
+            let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
             match (lhs_f, rhs_f) {
                 (NodeFilter::Predicate(lhs_p), NodeFilter::Predicate(rhs_p)) => {
                     let m = NodeMatcher {
-                        extract: Box::new(move |ctx, source| (lhs_p.extract)(ctx, source) || (rhs_p.extract)(ctx, source))
+                        extract: Rc::new(move |ctx, source| (lhs_p.extract)(ctx, source) || (rhs_p.extract)(ctx, source))
                     };
                     Ok(NodeFilter::Predicate(m))
                 },
@@ -247,7 +294,7 @@ fn compile_expr<'a>(ti : &'a Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -
                     match op_f {
                         NodeFilter::ArgumentListComputation(arg_matcher) => {
                             let arg_count_matcher = NodeMatcher {
-                                extract: Box::new(move |ctx, source| (arg_matcher.extract)(ctx, source).len() as i32)
+                                extract: Rc::new(move |ctx, source| (arg_matcher.extract)(ctx, source).len() as i32)
                             };
                             return Ok(NodeFilter::NumericComputation(arg_count_matcher));
                         },
@@ -263,21 +310,145 @@ fn compile_expr<'a>(ti : &'a Box<dyn TreeInterface + 'a>, e : &'a Expr<Typed>) -
             // the match reasonably-sized.  We look up method implementations
             // based on the method name and the base type computed by the type
             // checker.
-            let handler = method_impl_for(base.type_.clone(), method);
+
+            // We look up the handler based on the scalar type if this is
+            // Relational<T> (otherwise we just use T).  We do this because we
+            // implicitly treat Relational<T> values as List<T> for evaluation
+            // purposes
+            let scalar_base_type = base.type_.base_if_relational();
+            let handler = method_impl_for(scalar_base_type, method.clone());
             match handler {
                 Some(Handler(f)) => {
-                    let base_comp = compile_expr(ti, base)?;
-                    f(ti, base_comp, operands)
+                    let base_comp = compile_expr(Rc::clone(&ti), base)?;
+                    // If this is a list type, lift via
+                    // `transform_node_filter`. Otherwise, just evaluate
+                    // directly
+                    let target_type = e.type_.clone();
+                    let ops = operands.clone();
+                    match base_comp {
+                        NodeFilter::ArgumentListComputation(_) | NodeFilter::StringListComputation(_) => {
+                            transform_node_filter(target_type, &base_comp, Rc::new(move |elt : Rc<NodeFilter>| {
+                                f(Rc::clone(&ti), &elt, &ops)
+                            }))
+                        },
+                        _ => f(ti, &base_comp, &ops)
+                    }
                 },
                 None => {
                     panic!("No handler implemented for method `{}` of type `{:?}`", method, base.type_);
                 }
             }
-        },
+        }
+    }
+}
+
+fn as_predicate(nf : NodeFilter) -> NodeMatcher<bool> {
+    match nf {
+        NodeFilter::Predicate(nm) => nm,
+        _ => panic!("Impossible, expected Predicate")
+    }
+}
+
+fn as_string(nf : NodeFilter) -> NodeMatcher<String> {
+    match nf {
+        NodeFilter::StringComputation(nm) => nm,
+        _ => panic!("Impossible, expected String")
+    }
+}
+
+/// This is the core transformation for each case in `transform_node_filter`
+///
+/// This creates a new `NodeMatcher` that:
+///
+/// 1. Wraps a single element from the base element collection into a suitable
+///    singleton NodeFilter that the transformer can be applied to
+///
+/// 2. Apply the transformer (from the original type to the target type) to
+///    produce a NodeFilter wrapping a single element
+///
+/// 3. Extract the single result at the expected type and append it to the
+///    result collection
+fn transform_body<From, To, W, F, X>(base_elts : &NodeMatcher<Vec<From>>,
+                                     wrap_one : W,
+                                     extract_one : F,
+                                     transformer : Rc<X>) -> NodeMatcher<Vec<To>>
+where
+    From: Clone + 'static,
+    W: Fn(NodeMatcher<From>) -> NodeFilter + 'static,
+    F: Fn(NodeFilter) -> NodeMatcher<To> + 'static,
+    X: Fn(Rc<NodeFilter>) -> anyhow::Result<NodeFilter> + 'static
+{
+    let xfrm = Rc::clone(&transformer);
+    let args_extract = Rc::clone(&base_elts.extract);
+
+
+    NodeMatcher {
+        extract: Rc::new(move |ctx, source| {
+            let mut res = Vec::new();
+
+            for arg in args_extract(ctx, source) {
+                // Wrap each element in the carrier type for single elements so
+                // that the scalar processor (the transformer, above) can
+                // process it unmodified
+                let wrapper_matcher = NodeMatcher {
+                    extract: Rc::new(move |_ctx, _source| arg.clone())
+                };
+
+                let wrapper_filter = wrap_one(wrapper_matcher);
+                let result_filter = xfrm(Rc::new(wrapper_filter)).unwrap();
+                let comp = extract_one(result_filter);
+                let val = (comp.extract)(ctx, source);
+                res.push(val);
+            }
+
+            res
+        })
     }
 }
 
 
+/// A combinator to help lift operations over relations when needed
+///
+/// Most of the operations in the planner work over scalars, but need to be
+/// lifted over some Relational<T> values.  This combinator takes a NodeFilter
+/// that returns a relational value, applies the provided function to each
+/// element in the relation, and re-wraps the results into a relational value of
+/// the appropriate type (specified by the `result_type`)
+///
+/// NOTE: This requires that the result type of `F` is `result_type`. The type
+/// checker ensured this, so we just assume it here.
+fn transform_node_filter<'a, F>(result_type : Type, relation : &NodeFilter, transformer : Rc<F>) -> anyhow::Result<NodeFilter>
+where
+    F: Fn(Rc<NodeFilter>) -> anyhow::Result<NodeFilter> + 'static
+{
+    let xfrm : Rc<F> = Rc::clone(&transformer);
+    match relation {
+        NodeFilter::ArgumentListComputation(arg_list_matcher) => {
+            match result_type.base_if_relational() {
+                Type::PrimString => {
+                    let matcher = transform_body(arg_list_matcher, Box::new(|nm| NodeFilter::ArgumentComputation(nm)), as_string, xfrm);
+                    Ok(NodeFilter::StringListComputation(matcher))
+                },
+                _ => panic!("Unsupported conversion from Argument (only String is supported), result type `{}`", result_type)
+            }
+
+        },
+        NodeFilter::StringListComputation(string_list_matcher) => {
+            match result_type {
+                Type::PrimBoolean => {
+                    let matcher = transform_body(string_list_matcher, Box::new(|nm| NodeFilter::StringComputation(nm)), as_predicate, xfrm);
+                    Ok(NodeFilter::PredicateListComputation(matcher))
+                },
+                _ => {
+                    panic!("Unsupported conversion from `string` to `{}`", result_type);
+                }
+            }
+        },
+        _ => {
+            panic!("Attempted to transform non-list/relational result");
+        }
+    }
+}
 
 /// Build a query plan for the given query in the given language
 ///
@@ -309,7 +480,7 @@ pub fn build_query_plan<'a>(source : &'a SourceFile,
         return Err(anyhow::anyhow!(PlanError::NonSingletonSelect(num_selected)));
     }
 
-    let tree_interface : Box<dyn TreeInterface> = make_tree_interface(source);
+    let tree_interface : Rc<dyn TreeInterface> = make_tree_interface(source);
     let ctx = Context::new(query);
 
     match &query.select.select_exprs[0].expr.expr {
@@ -327,7 +498,7 @@ pub fn build_query_plan<'a>(source : &'a SourceFile,
             let flt = match &query.select.where_formula {
                 None => anyhow::Ok(None),
                 Some(w) => {
-                    let flt = compile_expr(&tree_interface, w)?;
+                    let flt = compile_expr(tree_interface, w)?;
                     anyhow::Ok(Some(flt))
                 }
             }?;

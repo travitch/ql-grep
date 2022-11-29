@@ -1,5 +1,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::query::ir::*;
 use crate::query::val_type::Type;
@@ -18,15 +20,17 @@ use crate::plan::interface::{NodeMatcher, TreeInterface};
 /// 3. The typed operands of the method call
 ///
 /// The callback returns a node filter that is suitable for evaluating the method call
-pub struct Handler(pub Box<dyn for <'a> Fn(&'a Box<dyn TreeInterface + 'a>, NodeFilter, &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> + Send + Sync>);
+///
+/// FIXME: The arguments need to be run-time values
+pub struct Handler(pub Arc<dyn for <'a> Fn(Rc<dyn TreeInterface>, &'a NodeFilter, &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> + Send + Sync>);
 
-fn callable_get_name<'a>(ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
+fn callable_get_name<'a>(ti : Rc<dyn TreeInterface>, base : &'a NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     // This is not necessarily an assertion, as this may not be supported for
     // the current language (which we don't know).
     match base {
         NodeFilter::CallableComputation(callable_matcher) => {
-            let name_matcher = ti.callable_name(callable_matcher)
+            let name_matcher = ti.callable_name(&callable_matcher)
                 .ok_or_else(|| PlanError::NotSupported("getNames".into(), "callable".into()))?;
             Ok(NodeFilter::StringComputation(name_matcher))
         },
@@ -37,11 +41,11 @@ fn callable_get_name<'a>(ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter, o
 }
 
 /// This is a relational method that returns a *list* of parameters
-fn callable_get_a_parameter<'a>(ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
+fn callable_get_a_parameter<'a>(ti : Rc<dyn TreeInterface>, base : &'a NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {
         NodeFilter::CallableComputation(callable_matcher) => {
-            let arg_matcher = ti.callable_arguments(callable_matcher)
+            let arg_matcher = ti.callable_arguments(&callable_matcher)
                 .ok_or_else(|| PlanError::NotSupported("arguments".into(), "callable".into()))?;
             Ok(NodeFilter::ArgumentListComputation(arg_matcher))
         },
@@ -51,7 +55,7 @@ fn callable_get_a_parameter<'a>(ti : &Box<dyn TreeInterface + 'a>, base : NodeFi
     }
 }
 
-fn string_regexp_match<'a>(_ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
+fn string_regexp_match<'a>(_ti : Rc<dyn TreeInterface>, base : &'a NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
     assert!(operands.len() == 1);
     // The base must be a string computation (and we require that it was a literal that we were able to already compile)
     let c = match base {
@@ -66,13 +70,32 @@ fn string_regexp_match<'a>(_ti : &Box<dyn TreeInterface + 'a>, base : NodeFilter
             panic!("Invalid regex for `regexpMatch`")
         }
     };
+    let x = Rc::clone(&c.extract);
     let comp = NodeMatcher {
-        extract: Box::new(move |ctx, source| {
-                    let matched_string = (c.extract)(ctx, source);
+        extract: Rc::new(move |ctx, source| {
+                    let matched_string = x(ctx, source);
                     rx.is_match(matched_string.as_ref())
                 })
     };
     Ok(NodeFilter::Predicate(comp))
+}
+
+fn parameter_get_name<'a>(_ti : Rc<dyn TreeInterface>, base : &'a NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::ArgumentComputation(c) => {
+            let x = Rc::clone(&c.extract);
+            let comp = NodeMatcher {
+                extract: Rc::new(move |ctx, source| {
+                    x(ctx, source).name.unwrap_or("<none>".into())
+                })
+            };
+            Ok(NodeFilter::StringComputation(comp))
+        },
+        _ => {
+            panic!("Invalid base value for Parameter.getName");
+        }
+    }
 }
 
 /// Validate the implementations of method calls against the claims in the
@@ -132,21 +155,23 @@ fn validate_library(impls : &HashMap<(Type, String), Handler>) {
 static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     let mut impls = HashMap::new();
 
-    impls.insert((Type::Method, "getName".into()), Handler(Box::new(callable_get_name)));
-    impls.insert((Type::Function, "getName".into()), Handler(Box::new(callable_get_name)));
-    impls.insert((Type::Callable, "getName".into()), Handler(Box::new(callable_get_name)));
+    impls.insert((Type::Method, "getName".into()), Handler(Arc::new(callable_get_name)));
+    impls.insert((Type::Function, "getName".into()), Handler(Arc::new(callable_get_name)));
+    impls.insert((Type::Callable, "getName".into()), Handler(Arc::new(callable_get_name)));
 
-    impls.insert((Type::Method, "getAParameter".into()), Handler(Box::new(callable_get_a_parameter)));
-    impls.insert((Type::Function, "getAParameter".into()), Handler(Box::new(callable_get_a_parameter)));
-    impls.insert((Type::Callable, "getAParameter".into()), Handler(Box::new(callable_get_a_parameter)));
+    impls.insert((Type::Method, "getAParameter".into()), Handler(Arc::new(callable_get_a_parameter)));
+    impls.insert((Type::Function, "getAParameter".into()), Handler(Arc::new(callable_get_a_parameter)));
+    impls.insert((Type::Callable, "getAParameter".into()), Handler(Arc::new(callable_get_a_parameter)));
 
-    impls.insert((Type::PrimString, "regexpMatch".into()), Handler(Box::new(string_regexp_match)));
+    impls.insert((Type::Parameter, "getName".into()), Handler(Arc::new(parameter_get_name)));
+
+    impls.insert((Type::PrimString, "regexpMatch".into()), Handler(Arc::new(string_regexp_match)));
 
     validate_library(&impls);
 
     impls
 });
 
-pub fn method_impl_for(base_type : Type, method_name : &str) -> Option<&Handler> {
-    Lazy::force(&METHOD_IMPLS).get(&(base_type, method_name.into()))
+pub fn method_impl_for(base_type : Type, method_name : String) -> Option<&'static Handler> {
+    Lazy::force(&METHOD_IMPLS).get(&(base_type, method_name))
 }

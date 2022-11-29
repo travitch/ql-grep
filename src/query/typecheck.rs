@@ -50,6 +50,25 @@ fn build_initial_type_environment(syntax : &Select<Syntax>) -> TypeEnv {
     }
 }
 
+fn evaluates_to_boolean(ty : &Type) -> bool {
+    *ty == Type::PrimBoolean || *ty == Type::Relational(Box::new(Type::PrimBoolean))
+}
+
+/// If any of the input types are relational, promote the return type to
+/// a relational type (otherwise just return the scalar return type)
+fn promote_return(scalar_ret_ty : &Type, input_types : &Vec<&Type>) -> Type {
+    for inp in input_types {
+        match inp {
+            Type::Relational(_) => {
+                return Type::Relational(Box::new(scalar_ret_ty.clone()))
+            },
+            _ => {}
+        }
+    }
+
+    scalar_ret_ty.clone()
+}
+
 /// Promote typed operands in argument positions when needed
 ///
 /// There are some operands that we might have to promote implicitly based on
@@ -137,14 +156,31 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             // not until there is a need.
             match (&lhs_ty.type_, &rhs_ty.type_) {
                 (Type::PrimInteger, Type::PrimInteger) => (),
+                (Type::Relational(t), Type::PrimInteger) => {
+                    match **t {
+                        Type::PrimInteger => (),
+                        _ => {
+                            return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), Type::Relational(t.clone()), *rhs.clone(), Type::PrimInteger)));
+                        }
+                    }
+                },
+                (Type::PrimInteger, Type::Relational(t)) => {
+                    match **t {
+                        Type::PrimInteger => (),
+                        _ => {
+                            return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), Type::PrimInteger, *rhs.clone(), Type::Relational(t.clone()))));
+                        }
+                    }
+                },
                 (lt, rt) => {
                     return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), lt.clone(), *rhs.clone(), rt.clone())));
                 }
             }
 
+            let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::RelationalComparison(Box::new(lhs_ty), *op, Box::new(rhs_ty)),
-                type_: Type::PrimBoolean
+                type_: ret_ty
             })
         },
         Expr_::EqualityComparison(lhs, op, rhs) => {
@@ -153,47 +189,51 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
 
             // The actual check is to ensure that the comparison operators are
             // actually used safely.
-            if lhs_ty.type_ != rhs_ty.type_ {
+            if lhs_ty.type_.base_if_relational() != rhs_ty.type_.base_if_relational() {
                 return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), lhs_ty.type_, *rhs.clone(), rhs_ty.type_)));
             }
 
+            let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::EqualityComparison(Box::new(lhs_ty), *op, Box::new(rhs_ty)),
-                type_: Type::PrimBoolean
+                type_: ret_ty
             })
         },
         Expr_::LogicalConjunction(lhs, rhs) => {
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
 
-            if lhs_ty.type_ != Type::PrimBoolean {
+            if ! evaluates_to_boolean(&lhs_ty.type_) {
                 return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*lhs.clone(), Type::PrimBoolean, lhs_ty.type_)));
             }
 
-            if rhs_ty.type_ != Type::PrimBoolean {
+            if ! evaluates_to_boolean(&rhs_ty.type_) {
                 return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*rhs.clone(), Type::PrimBoolean, rhs_ty.type_)));
             }
 
+            let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::LogicalConjunction(Box::new(lhs_ty), Box::new(rhs_ty)),
-                type_: Type::PrimBoolean
+                type_: ret_ty
             })
         },
         Expr_::LogicalDisjunction(lhs, rhs) => {
+            // Either operand (or both) may be Relational<bool>, in which case we treat that as any(val)
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
 
-            if lhs_ty.type_ != Type::PrimBoolean {
+            if ! evaluates_to_boolean(&lhs_ty.type_) {
                 return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*lhs.clone(), Type::PrimBoolean, lhs_ty.type_)));
             }
 
-            if rhs_ty.type_ != Type::PrimBoolean {
+            if ! evaluates_to_boolean(&rhs_ty.type_) {
                 return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*rhs.clone(), Type::PrimBoolean, rhs_ty.type_)));
             }
 
+            let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::LogicalDisjunction(Box::new(lhs_ty), Box::new(rhs_ty)),
-                type_: Type::PrimBoolean
+                type_: ret_ty
             })
         },
         Expr_::Aggregate(op, exprs) => {
@@ -240,7 +280,13 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             }
 
             let base_ty = typecheck_expr(env, base)?;
-            let MethodIndex(method_idx) = env.type_index.get(&base_ty.type_)
+
+            // We have an interesting case here. If the base is of type
+            // "Relational<T>", we type check it as a single value of type T (but
+            // evaluate it as a List<T>).
+            let scalar_base_ty = base_ty.type_.base_if_relational();
+
+            let MethodIndex(method_idx) = env.type_index.get(&scalar_base_ty)
                 .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidReceiverTypeForMethod(base_ty.type_.clone(), accessor.clone())))?;
             let MethodSignature(method_name, arg_types, ret_ty, _status) = method_idx.get(accessor)
                 .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidMethodForType(accessor.clone(), base_ty.type_.clone())))?;
@@ -259,15 +305,27 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             // promotion here. For example, we learn that the string literal in
             // the first argument to `string.regexpMatch` is actually a Regex,
             // so we can parse and promote it here.
+            //
+            // NOTE: We do some implicit promotion here, but we do not yet
+            // support promotion of relational values as method arguments.
             for (idx, operand) in typed_operands.iter().enumerate() {
                 let expected_type = arg_types[idx].clone();
                 let typed_operand = typecheck_operand(&mname, idx, operand, expected_type)?;
                 promoted_operands.push(typed_operand);
             }
 
+            // If the base type was relational, we need to promote the result
+            // type to relational.  We can tell this is the case if the base
+            // type and scalarized base type are not equal.
+            let promoted_ret_ty = if base_ty.type_ != scalar_base_ty {
+                Type::Relational(Box::new(ret_ty.clone()))
+            } else {
+                ret_ty.clone()
+            };
+
             Ok(Expr {
                 expr: Expr_::QualifiedAccess(Box::new(base_ty), accessor.clone(), promoted_operands),
-                type_: ret_ty.clone()
+                type_: promoted_ret_ty
             })
         },
     }

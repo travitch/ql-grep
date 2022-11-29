@@ -42,7 +42,19 @@ fn evaluate_filter(target : &source_file::SourceFile, ctx : &mut EvaluationConte
             let s = (nm.extract)(ctx, target.source.as_bytes());
             Ok(Value::Constant(Constant::String_(s)))
         },
+        NodeFilter::PredicateListComputation(nm) => {
+            // We evaluate a list of predicates p as `any(p)` (i.e., it is true
+            // if any of the predicates evaluates to true)
+            let ps = (nm.extract)(ctx, target.source.as_bytes());
+            Ok(Value::Constant(Constant::Boolean(ps.iter().any(|p| *p))))
+        },
+        NodeFilter::ArgumentComputation(_c) => {
+            panic!("Not evaluation arguments yet");
+        },
         NodeFilter::ArgumentListComputation(_c) => {
+            panic!("No concrete list evaluation needed yet");
+        },
+        NodeFilter::StringListComputation(_c) => {
             panic!("No concrete list evaluation needed yet");
         },
         NodeFilter::CallableComputation(_c) => {

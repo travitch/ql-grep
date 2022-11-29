@@ -8,8 +8,6 @@ pub enum PlanError {
     NonSingletonSelect(usize),
     #[error("Unsupported target for a select expression: `{0:?}`")]
     UnsupportedSelectTarget(Expr_<Typed>),
-    #[error("Unsupported type for a select expression: `{0:?}`")]
-    UnsupportedSelectType(Type),
     #[error("Unsupported type `{0:?}` for language {1:?}")]
     UnsupportedTypeForLanguage(Type, Language),
     #[error("Use of undefined variable `{0}`")]

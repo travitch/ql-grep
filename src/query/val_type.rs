@@ -139,6 +139,28 @@ impl Type {
             Type::Relational(_) => false,
         }
     }
+
+    /// If this type is Relational<T>, return T. Otherwise just return this type.
+    ///
+    /// We only want to treat Relational as special, as we want to support
+    /// methods on List types.
+    pub fn base_if_relational(&self) -> Type {
+        match self {
+            Type::Relational(inner_ty) => inner_ty.as_ref().clone(),
+            Type::List(_) |
+            Type::PrimInteger |
+            Type::PrimBoolean |
+            Type::PrimString |
+            Type::Regex |
+            Type::Type |
+            Type::Class |
+            Type::Function |
+            Type::Method |
+            Type::Callable |
+            Type::Parameter |
+            Type::Field => self.clone(),
+        }
+    }
 }
 
 #[test]

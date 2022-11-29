@@ -43,7 +43,7 @@ type "Callable" {
 
 type "Parameter" {
     method "getType" type="Type" status="Unimplemented"
-    method "getName" type="string" status="Unimplemented"
+    method "getName" type="string"
     method "getIndex" type="int" status="Unimplemented"
 }
 

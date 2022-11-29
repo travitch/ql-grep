@@ -1,8 +1,8 @@
 use tree_sitter::Node;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::query::val_type::Type;
-use crate::source_file::SourceFile;
 
 pub struct TopLevelMatcher {
     /// The Tree Sitter query to match the given "top-level" structure
@@ -109,13 +109,14 @@ impl<'a> EvaluationContext<'a> {
 /// FIXME: Add another field that records ranges to highlight in results (i.e.,
 /// the code that contributes to a Node being included)
 pub struct NodeMatcher<R> {
-    pub extract : Box<dyn for <'a> Fn(&'a EvaluationContext<'a>, &'a [u8]) -> R>
+    pub extract : Rc<dyn for <'a> Fn(&'a EvaluationContext<'a>, &'a [u8]) -> R>
 }
 
 /// A representation of language-level types (e.g., Java or C types)
 ///
 /// This is a type for clarity in the data model. For now it is just a `String`,
 /// but eventually we will probably want more structure
+#[derive(Clone)]
 pub struct LanguageType(String);
 
 impl LanguageType {
@@ -134,6 +135,7 @@ impl LanguageType {
 /// arguments to indicate that they are unused (e.g., C).
 ///
 /// The type is optional because some languages are untyped.
+#[derive(Clone)]
 pub struct FormalArgument {
     pub name : Option<String>,
     pub declared_type : Option<LanguageType>
@@ -148,9 +150,6 @@ pub struct FormalArgument {
 /// In cases where structure is sufficiently uniform, we should use normal
 /// functions instead.
 pub trait TreeInterface {
-    /// The underlying source file
-    fn source(&self) -> &SourceFile;
-
     /// Return a matcher for a type declared in the From clause of a QL query
     ///
     /// This can fail if the given type is not supported for the language
@@ -159,11 +158,11 @@ pub trait TreeInterface {
 
     /// A node matcher that extracts formal arguments from a callable node
     /// (e.g., a method or function)
-    fn callable_arguments(&self, node : NodeMatcher<CallableRef>) -> Option<NodeMatcher<Vec<FormalArgument>>>;
+    fn callable_arguments(&self, node : &NodeMatcher<CallableRef>) -> Option<NodeMatcher<Vec<FormalArgument>>>;
 
     /// A node matcher that extracts the name of a callable node.
     ///
     /// This is tailored to just callables because getting the name of other
     /// types of nodes requires different patterns
-    fn callable_name(&self, node : NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>;
+    fn callable_name(&self, node : &NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>;
 }

@@ -1,26 +1,21 @@
+use std::rc::Rc;
 use tree_sitter::Node;
 
 use crate::query::val_type::Type;
 use crate::plan::interface::*;
 use crate::source_file::SourceFile;
 
-pub struct CPPTreeInterface<'a> {
-    file : &'a SourceFile
+pub struct CPPTreeInterface {
 }
 
-impl<'a> CPPTreeInterface<'a> {
-    pub fn new(f : &'a SourceFile) -> Self {
+impl CPPTreeInterface {
+    pub fn new(_f : &SourceFile) -> Self {
         CPPTreeInterface {
-            file : f
         }
     }
 }
 
-impl<'a> TreeInterface for CPPTreeInterface<'a> {
-    fn source(&self) -> &'a SourceFile {
-        self.file
-    }
-
+impl TreeInterface for CPPTreeInterface {
     fn top_level_type(&self, t : &Type) -> Option<TopLevelMatcher> {
         match t {
             Type::Function => {
@@ -35,11 +30,12 @@ impl<'a> TreeInterface for CPPTreeInterface<'a> {
         }
     }
 
-    fn callable_arguments(&self, base : NodeMatcher<CallableRef>) -> Option<NodeMatcher<Vec<FormalArgument>>>
+    fn callable_arguments(&self, base : &NodeMatcher<CallableRef>) -> Option<NodeMatcher<Vec<FormalArgument>>>
     {
+        let x = Rc::clone(&base.extract);
         let matcher = NodeMatcher {
-            extract: Box::new(move |ctx, source| {
-                let callable_ref = (base.extract)(ctx, source);
+            extract: Rc::new(move |ctx, source| {
+                let callable_ref = x(ctx, source);
                 let node = ctx.lookup_callable(&callable_ref);
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(parameter_declaration) @parameter";
@@ -52,11 +48,12 @@ impl<'a> TreeInterface for CPPTreeInterface<'a> {
         Some(matcher)
     }
 
-    fn callable_name(&self, base : NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>
+    fn callable_name(&self, base : &NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>
     {
+        let x = Rc::clone(&base.extract);
         let matcher = NodeMatcher {
-            extract: Box::new(move |ctx, source| {
-                let callable_ref = (base.extract)(ctx, source);
+            extract: Rc::new(move |ctx, source| {
+                let callable_ref = x(ctx, source);
                 let node = ctx.lookup_callable(&callable_ref);
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(function_declarator (identifier) @function.name)";
