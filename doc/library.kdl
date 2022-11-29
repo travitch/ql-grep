@@ -42,13 +42,14 @@ type "Callable" {
 }
 
 type "Parameter" {
-    method "getType" type="Type" status="Unimplemented"
+    method "getType" type="Type" \
+        docstring=r"Return the type of the parameter (`Any` if the language is untyped)."
     method "getName" type="string"
     method "getIndex" type="int" status="Unimplemented"
 }
 
 type "Type" {
-    method "getName" type="string" status="Unimplemented"
+    method "getName" type="string"
 }
 
 type "Regex" {

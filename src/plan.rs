@@ -7,7 +7,7 @@ mod errors;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::plan::interface::{CallableRef, TreeInterface, NodeMatcher, FormalArgument, BoundNode};
+use crate::plan::interface::{CallableRef, LanguageType, TreeInterface, NodeMatcher, FormalArgument, BoundNode};
 use crate::plan::java::JavaTreeInterface;
 use crate::plan::cpp::CPPTreeInterface;
 use crate::query::ir::{Repr, Typed, Expr, Expr_, Constant, EqualityOp, CompOp, AggregateOp, CachedRegex};
@@ -20,6 +20,8 @@ use crate::plan::method_library::{Handler, method_impl_for};
 pub enum NodeFilter {
     Predicate(NodeMatcher<bool>),
     PredicateListComputation(NodeMatcher<Vec<bool>>),
+    TypeComputation(NodeMatcher<LanguageType>),
+    TypeListComputation(NodeMatcher<Vec<LanguageType>>),
     NumericComputation(NodeMatcher<i32>),
     StringComputation(NodeMatcher<String>),
     StringListComputation(NodeMatcher<Vec<String>>),
@@ -27,6 +29,25 @@ pub enum NodeFilter {
     CallableComputation(NodeMatcher<CallableRef>),
     ArgumentComputation(NodeMatcher<FormalArgument>),
     ArgumentListComputation(NodeMatcher<Vec<FormalArgument>>),
+}
+
+impl NodeFilter {
+    /// Return a string representation of the NodeFilter's carried type for debugging purposes
+    pub fn kind(&self) -> String {
+        match self {
+            NodeFilter::Predicate(_) => "bool".into(),
+            NodeFilter::PredicateListComputation(_) => "[bool]".into(),
+            NodeFilter::TypeComputation(_) => "Type".into(),
+            NodeFilter::TypeListComputation(_) => "[Type]".into(),
+            NodeFilter::NumericComputation(_) => "int".into(),
+            NodeFilter::StringComputation(_) => "string".into(),
+            NodeFilter::StringListComputation(_) => "[string]".into(),
+            NodeFilter::RegexComputation(_) => "Regex".into(),
+            NodeFilter::CallableComputation(_) => "Callable".into(),
+            NodeFilter::ArgumentComputation(_) => "Parameter".into(),
+            NodeFilter::ArgumentListComputation(_) => "[Parameter".into()
+        }
+    }
 }
 
 pub struct Matching;
@@ -325,8 +346,13 @@ fn compile_expr<'a>(ti : Rc<dyn TreeInterface>, e : &'a Expr<Typed>) -> anyhow::
                     // directly
                     let target_type = e.type_.clone();
                     let ops = operands.clone();
+                    // FIXME: This spot needs to refer to all of the list
+                    // types. That is pretty fragile. Instead,
+                    // transform_node_filter should reject scalars with an
+                    // Option return so that we can just automatically get newly
+                    // supported types
                     match base_comp {
-                        NodeFilter::ArgumentListComputation(_) | NodeFilter::StringListComputation(_) => {
+                        NodeFilter::ArgumentListComputation(_) | NodeFilter::StringListComputation(_) | NodeFilter::TypeListComputation(_) => {
                             transform_node_filter(target_type, &base_comp, Rc::new(move |elt : Rc<NodeFilter>| {
                                 f(Rc::clone(&ti), &elt, &ops)
                             }))
@@ -335,7 +361,7 @@ fn compile_expr<'a>(ti : Rc<dyn TreeInterface>, e : &'a Expr<Typed>) -> anyhow::
                     }
                 },
                 None => {
-                    panic!("No handler implemented for method `{}` of type `{:?}`", method, base.type_);
+                    panic!("No handler implemented for method `{}` of type `{}`", method, base.type_);
                 }
             }
         }
@@ -353,6 +379,13 @@ fn as_string(nf : NodeFilter) -> NodeMatcher<String> {
     match nf {
         NodeFilter::StringComputation(nm) => nm,
         _ => panic!("Impossible, expected String")
+    }
+}
+
+fn as_type(nf : NodeFilter) -> NodeMatcher<LanguageType> {
+    match nf {
+        NodeFilter::TypeComputation(nm) => nm,
+        _ => panic!("Impossible, expected Type")
     }
 }
 
@@ -429,18 +462,32 @@ where
                     let matcher = transform_body(arg_list_matcher, Box::new(|nm| NodeFilter::ArgumentComputation(nm)), as_string, xfrm);
                     Ok(NodeFilter::StringListComputation(matcher))
                 },
+                Type::Type => {
+                    let matcher = transform_body(arg_list_matcher, Box::new(|nm| NodeFilter::ArgumentComputation(nm)), as_type, xfrm);
+                    Ok(NodeFilter::TypeListComputation(matcher))
+                },
                 _ => panic!("Unsupported conversion from Argument (only String is supported), result type `{}`", result_type)
             }
-
         },
         NodeFilter::StringListComputation(string_list_matcher) => {
-            match result_type {
+            match result_type.base_if_relational() {
                 Type::PrimBoolean => {
                     let matcher = transform_body(string_list_matcher, Box::new(|nm| NodeFilter::StringComputation(nm)), as_predicate, xfrm);
                     Ok(NodeFilter::PredicateListComputation(matcher))
                 },
                 _ => {
                     panic!("Unsupported conversion from `string` to `{}`", result_type);
+                }
+            }
+        },
+        NodeFilter::TypeListComputation(type_list_matcher) => {
+            match result_type.base_if_relational() {
+                Type::PrimString => {
+                    let matcher = transform_body(type_list_matcher, Box::new(|nm| NodeFilter::TypeComputation(nm)), as_string, xfrm);
+                    Ok(NodeFilter::StringListComputation(matcher))
+                },
+                _ => {
+                    panic!("Unsupported conversion from `Type` to `{}`", result_type);
                 }
             }
         },

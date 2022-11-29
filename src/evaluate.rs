@@ -42,6 +42,9 @@ fn evaluate_filter(target : &source_file::SourceFile, ctx : &mut EvaluationConte
             let s = (nm.extract)(ctx, target.source.as_bytes());
             Ok(Value::Constant(Constant::String_(s)))
         },
+        NodeFilter::TypeComputation(_nm) => {
+            panic!("Top-level evaluation of types is not supported");
+        },
         NodeFilter::PredicateListComputation(nm) => {
             // We evaluate a list of predicates p as `any(p)` (i.e., it is true
             // if any of the predicates evaluates to true)
@@ -62,6 +65,9 @@ fn evaluate_filter(target : &source_file::SourceFile, ctx : &mut EvaluationConte
         },
         NodeFilter::RegexComputation(_c) => {
             panic!("Not evaluating regexes yet");
+        },
+        NodeFilter::TypeListComputation(_c) => {
+            panic!("Not evaluating type lists");
         },
     }
 }

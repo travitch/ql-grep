@@ -116,7 +116,7 @@ pub struct NodeMatcher<R> {
 ///
 /// This is a type for clarity in the data model. For now it is just a `String`,
 /// but eventually we will probably want more structure
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LanguageType(String);
 
 impl LanguageType {
@@ -135,7 +135,7 @@ impl LanguageType {
 /// arguments to indicate that they are unused (e.g., C).
 ///
 /// The type is optional because some languages are untyped.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FormalArgument {
     pub name : Option<String>,
     pub declared_type : Option<LanguageType>

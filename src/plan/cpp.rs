@@ -95,6 +95,7 @@ fn parse_type_node<'a>(decl : &Option<Declarator>, n : &'a Node, src : &'a [u8])
     LanguageType::new(&s)
 }
 
+#[derive(Debug)]
 enum Declarator {
     Pointer(Box<Declarator>),
     Array(Box<Declarator>),

@@ -9,7 +9,7 @@ use crate::library::Status;
 use crate::library::index::{library_index, MethodIndex, MethodSignature};
 use crate::plan::NodeFilter;
 use crate::plan::errors::PlanError;
-use crate::plan::interface::{NodeMatcher, TreeInterface};
+use crate::plan::interface::{LanguageType, NodeMatcher, TreeInterface};
 
 /// A handler for method calls (qualified accesses) in the planner
 ///
@@ -98,6 +98,47 @@ fn parameter_get_name<'a>(_ti : Rc<dyn TreeInterface>, base : &'a NodeFilter, op
     }
 }
 
+fn parameter_get_type<'a>(_ti : Rc<dyn TreeInterface>, base : &'a NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::ArgumentComputation(c) => {
+            let x = Rc::clone(&c.extract);
+            let comp = NodeMatcher {
+                extract: Rc::new(move |ctx, source| {
+                    // FIXME: Probably want to have a better (i.e., more
+                    // structured) representation if the type is missing
+                    let default_ty = LanguageType::new("<Any>");
+                    x(ctx, source).declared_type.unwrap_or(default_ty)
+                })
+            };
+
+            Ok(NodeFilter::TypeComputation(comp))
+        },
+        _ => {
+            panic!("Invalid base value for Parameter.getType");
+        }
+    }
+}
+
+fn type_get_name<'a>(_ti : Rc<dyn TreeInterface>, base : &'a NodeFilter, operands : &'a Vec<Expr<Typed>>) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::TypeComputation(tc) => {
+            let x = Rc::clone(&tc.extract);
+            let comp = NodeMatcher {
+                extract: Rc::new(move |ctx, source| {
+                    x(ctx, source).as_type_string()
+                })
+            };
+
+            Ok(NodeFilter::StringComputation(comp))
+        },
+        _ => {
+            panic!("Invalid base value of type `{}` for Type.getName", base.kind());
+        }
+    }
+}
+
 /// Validate the implementations of method calls against the claims in the
 /// library documentation.  The intent is that the library documentation should
 /// always correctly reflect what subset of CodeQL ql-grep supports.  Any
@@ -164,8 +205,11 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     impls.insert((Type::Callable, "getAParameter".into()), Handler(Arc::new(callable_get_a_parameter)));
 
     impls.insert((Type::Parameter, "getName".into()), Handler(Arc::new(parameter_get_name)));
+    impls.insert((Type::Parameter, "getType".into()), Handler(Arc::new(parameter_get_type)));
 
     impls.insert((Type::PrimString, "regexpMatch".into()), Handler(Arc::new(string_regexp_match)));
+
+    impls.insert((Type::Type, "getName".into()), Handler(Arc::new(type_get_name)));
 
     validate_library(&impls);
 
