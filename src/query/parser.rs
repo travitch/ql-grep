@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use tracing::error;
 use tree_sitter;
 
 use crate::query::ir::{Syntax, AsExpr, Expr, Expr_, VarDecl, Select, EqualityOp, CompOp, Constant, AggregateOp, Untyped};
@@ -23,7 +24,7 @@ pub fn get_child_of_kind<'a>(node : tree_sitter::Node<'a>, target_kind : &'stati
 /// Expect a single child node with any type
 fn any_single_child(node : tree_sitter::Node) -> anyhow::Result<tree_sitter::Node> {
     if node.named_child_count() != 1 {
-        println!("node count: {:?} ({:?}, {:?})", node.named_child_count(), node.named_child(0).unwrap(), node.named_child(1).unwrap());
+        error!("node count: {:?} ({:?}, {:?})", node.named_child_count(), node.named_child(0).unwrap(), node.named_child(1).unwrap());
         return Err(anyhow::anyhow!(QueryError::MissingExpectedChildNode(node.range(), "$ANY".into())));
     }
 
@@ -271,8 +272,11 @@ fn parse_var_decl<'a>(node : tree_sitter::Node<'a>, source : &'a [u8]) -> anyhow
 /// This parser uses simple recursive descent, as Tree Sitter has already
 /// resolved all of the interesting precedence parsing challenges.
 pub fn parse_query_ast(ast : &tree_sitter::Tree, source : impl AsRef<[u8]>) -> anyhow::Result<Select<Syntax>> {
-    println!("Query: \n{:?}", ast.root_node().to_sexp());
     let root = ast.root_node();
+    if root.has_error() {
+        error!("Error parsing query:\n{}", ast.root_node().to_sexp());
+        return Err(anyhow::anyhow!(QueryError::QueryParseError));
+    }
     let module_member = get_child_of_kind(root, "moduleMember")?;
     let sel = get_child_of_kind(module_member, "select")?;
 
@@ -282,7 +286,6 @@ pub fn parse_query_ast(ast : &tree_sitter::Tree, source : impl AsRef<[u8]>) -> a
 
     let mut cursor = sel.walk();
     for child in sel.named_children(&mut cursor) {
-        println!("child: {:?}", child.to_sexp());
         match child.kind() {
             "asExprs" => {
                 // This determines all of the expressions
