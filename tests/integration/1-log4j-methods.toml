@@ -1,0 +1,8 @@
+# Match all of the methods in log4j
+
+query = """
+from Method m
+select m
+"""
+codebase = "logging-log4j2"
+num_matches = 17764

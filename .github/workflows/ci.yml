@@ -6,7 +6,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          submodules: recursive
+          submodules: false
+      - run: |
+          git submodule update --init --depth 1
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
