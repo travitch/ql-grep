@@ -16,3 +16,15 @@
 [submodule "third_party/tree-sitter-ql"]
 	path = third_party/tree-sitter-ql
 	url = https://github.com/tree-sitter/tree-sitter-ql.git
+[submodule "tests/codebases/logging-log4j2"]
+	path = tests/codebases/logging-log4j2
+	url = https://github.com/apache/logging-log4j2.git
+[submodule "tests/codebases/jenkins"]
+	path = tests/codebases/jenkins
+	url = https://github.com/jenkinsci/jenkins.git
+[submodule "tests/codebases/linux"]
+	path = tests/codebases/linux
+	url = https://github.com/torvalds/linux.git
+[submodule "tests/codebases/qmk_firmware"]
+	path = tests/codebases/qmk_firmware
+	url = https://github.com/qmk/qmk_firmware.git

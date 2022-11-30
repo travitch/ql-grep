@@ -98,6 +98,7 @@ fn parse_type_node<'a>(decl : &Option<Declarator>, n : &'a Node, src : &'a [u8])
 #[derive(Debug)]
 enum Declarator {
     Pointer(Box<Declarator>),
+    Reference(Box<Declarator>),
     Array(Box<Declarator>),
     Function(Box<Declarator>),
     Unnamed,
@@ -113,6 +114,7 @@ impl Declarator {
             Declarator::Function(_) => "function-pointer",
             Declarator::Pointer(d) => d.type_name(),
             Declarator::Unnamed => "<unnamed>",
+            Declarator::Reference(d) => d.type_name(),
         }
     }
 
@@ -131,6 +133,10 @@ impl Declarator {
                 s.push_str("[]");
                 d.append_declarators(s);
             },
+            Declarator::Reference(d) => {
+                s.push('&');
+                d.append_declarators(s);
+            }
             Declarator::Unnamed => {},
         }
     }
@@ -152,9 +158,20 @@ fn parse_declarator<'a>(n : &'a Node, src : &'a [u8]) -> Declarator {
         "function_declarator" => {
             // This is a parenthesized declarator that we can skip for now
             let next_child = n.child_by_field_name("declarator").unwrap();
-            let next_child = get_child_of_kind(next_child, "pointer_declarator").unwrap();
-            Declarator::Function(Box::new(parse_declarator(&next_child, src)))
+            let next_declarator_child = get_child_of_kind(next_child, "pointer_declarator");
+            match next_declarator_child {
+                Err(_) => {
+                    parse_declarator(&next_child, src)
+                },
+                Ok(next_child) => {
+                    Declarator::Function(Box::new(parse_declarator(&next_child, src)))
+                }
+            }
         },
+        "reference_declarator" => {
+            let next_child = get_child_of_kind(*n, "identifier").unwrap();
+            Declarator::Reference(Box::new(parse_declarator(&next_child, src)))
+        }
         "abstract_pointer_declarator" => {
             Declarator::Unnamed
         },

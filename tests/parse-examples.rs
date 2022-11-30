@@ -1,6 +1,4 @@
 #![cfg(test)]
-extern crate test_generator;
-
 use test_generator::test_resources;
 
 use ql_grep::query::parse_query;

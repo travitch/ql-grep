@@ -1,0 +1,7 @@
+# Test argument type matching for C
+
+query = """
+from Function f where f.getAParameter().getType().getName() = "uint64_t" select f
+"""
+codebase = "qmk_firmware"
+num_matches = 9

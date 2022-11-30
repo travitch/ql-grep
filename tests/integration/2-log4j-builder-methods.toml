@@ -1,0 +1,11 @@
+# Match all of the methods in log4j whose names start with 'build'
+#
+# This tests the regular expression matching capability
+
+query = """
+from Method m
+where m.getName().regexpMatch("build.*")
+select m
+"""
+codebase = "logging-log4j2"
+num_matches = 142
