@@ -241,7 +241,7 @@ fn compile_expr<'a>(ti : Rc<dyn TreeInterface>, e : &'a Expr<Typed>) -> anyhow::
                                         panic!("Invalid branch, expected a string computation")
                                     }
                                 }
-                            }))?;
+                            })).unwrap();
                             Ok(lifted)
                         },
                         EqualityOp::NE => {
@@ -260,7 +260,7 @@ fn compile_expr<'a>(ti : Rc<dyn TreeInterface>, e : &'a Expr<Typed>) -> anyhow::
                                         panic!("Invalid branch, expected a string computation")
                                     }
                                 }
-                            }))?;
+                            })).unwrap();
                             Ok(lifted)
                         }
                     }
@@ -345,20 +345,14 @@ fn compile_expr<'a>(ti : Rc<dyn TreeInterface>, e : &'a Expr<Typed>) -> anyhow::
                     // `transform_node_filter`. Otherwise, just evaluate
                     // directly
                     let target_type = e.type_.clone();
-                    let ops = operands.clone();
-                    // FIXME: This spot needs to refer to all of the list
-                    // types. That is pretty fragile. Instead,
-                    // transform_node_filter should reject scalars with an
-                    // Option return so that we can just automatically get newly
-                    // supported types
-                    match base_comp {
-                        NodeFilter::ArgumentListComputation(_) | NodeFilter::StringListComputation(_) | NodeFilter::TypeListComputation(_) => {
-                            transform_node_filter(target_type, &base_comp, Rc::new(move |elt : Rc<NodeFilter>| {
-                                f(Rc::clone(&ti), &elt, &ops)
-                            }))
-                        },
-                        _ => f(ti, &base_comp, &ops)
-                    }
+                    let ops1 = operands.clone();
+                    let ops2 = operands.clone();
+                    let ti1 = Rc::clone(&ti);
+                    transform_node_filter(target_type, &base_comp, Rc::new(move |elt : Rc<NodeFilter>| {
+                        f(Rc::clone(&ti1), &elt, &ops1)
+                    })).map_or_else(|| {
+                        f(Rc::clone(&ti), &base_comp, &ops2)
+                    }, |t| Ok(t))
                 },
                 None => {
                     panic!("No handler implemented for method `{}` of type `{}`", method, base.type_);
@@ -450,7 +444,10 @@ where
 ///
 /// NOTE: This requires that the result type of `F` is `result_type`. The type
 /// checker ensured this, so we just assume it here.
-fn transform_node_filter<'a, F>(result_type : Type, relation : &NodeFilter, transformer : Rc<F>) -> anyhow::Result<NodeFilter>
+///
+/// This function returns None if the given `relation` is not a list.
+/// Otherwise, it always returns a NodeFilter.
+fn transform_node_filter<'a, F>(result_type : Type, relation : &NodeFilter, transformer : Rc<F>) -> Option<NodeFilter>
 where
     F: Fn(Rc<NodeFilter>) -> anyhow::Result<NodeFilter> + 'static
 {
@@ -460,11 +457,11 @@ where
             match result_type.base_if_relational() {
                 Type::PrimString => {
                     let matcher = transform_body(arg_list_matcher, Box::new(|nm| NodeFilter::ArgumentComputation(nm)), as_string, xfrm);
-                    Ok(NodeFilter::StringListComputation(matcher))
+                    Some(NodeFilter::StringListComputation(matcher))
                 },
                 Type::Type => {
                     let matcher = transform_body(arg_list_matcher, Box::new(|nm| NodeFilter::ArgumentComputation(nm)), as_type, xfrm);
-                    Ok(NodeFilter::TypeListComputation(matcher))
+                    Some(NodeFilter::TypeListComputation(matcher))
                 },
                 _ => panic!("Unsupported conversion from Argument (only String is supported), result type `{}`", result_type)
             }
@@ -473,7 +470,7 @@ where
             match result_type.base_if_relational() {
                 Type::PrimBoolean => {
                     let matcher = transform_body(string_list_matcher, Box::new(|nm| NodeFilter::StringComputation(nm)), as_predicate, xfrm);
-                    Ok(NodeFilter::PredicateListComputation(matcher))
+                    Some(NodeFilter::PredicateListComputation(matcher))
                 },
                 _ => {
                     panic!("Unsupported conversion from `string` to `{}`", result_type);
@@ -484,16 +481,14 @@ where
             match result_type.base_if_relational() {
                 Type::PrimString => {
                     let matcher = transform_body(type_list_matcher, Box::new(|nm| NodeFilter::TypeComputation(nm)), as_string, xfrm);
-                    Ok(NodeFilter::StringListComputation(matcher))
+                    Some(NodeFilter::StringListComputation(matcher))
                 },
                 _ => {
                     panic!("Unsupported conversion from `Type` to `{}`", result_type);
                 }
             }
         },
-        _ => {
-            panic!("Attempted to transform non-list/relational result");
-        }
+        _ => None
     }
 }
 
