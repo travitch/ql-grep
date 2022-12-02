@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::library::index::{library_index, MethodIndex, MethodSignature};
+use crate::library::index::{library_index, TypeIndex, MethodSignature};
 use crate::query::ir::*;
 use crate::query::val_type::Type;
 
@@ -34,7 +34,7 @@ struct TypeEnv {
     /// Records the type of each variable in scope
     env: HashMap<String, Type>,
     /// Provides type signatures for all of the library types and their methods
-    type_index: &'static HashMap<Type, MethodIndex>,
+    type_index: &'static HashMap<Type, TypeIndex>,
 }
 
 fn build_initial_type_environment(syntax : &Select<Syntax>) -> TypeEnv {
@@ -286,8 +286,9 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             // evaluate it as a List<T>).
             let scalar_base_ty = base_ty.type_.base_if_relational();
 
-            let MethodIndex(method_idx) = env.type_index.get(&scalar_base_ty)
+            let ty_index = env.type_index.get(&scalar_base_ty)
                 .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidReceiverTypeForMethod(base_ty.type_.clone(), accessor.clone())))?;
+            let method_idx = &ty_index.method_index;
             let MethodSignature(method_name, arg_types, ret_ty, _status) = method_idx.get(accessor)
                 .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidMethodForType(accessor.clone(), base_ty.type_.clone())))?;
 

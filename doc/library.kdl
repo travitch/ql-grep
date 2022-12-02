@@ -12,6 +12,8 @@
 //   - string
 
 type "Function" {
+    contains "Parameter"
+    contains "Call"
     method "getAParameter" type="Relational<Parameter>" \
         docstring=r"Return any parameter in the function signature; this is intended to be used in a relational context."
     method "getParameter" type="Parameter" status="Unimplemented" {
@@ -19,9 +21,13 @@ type "Function" {
     }
     method "getType" type="Type" status="Unimplemented"
     method "getName" type="string"
+    method "getACall" type="Relational<Call>" status="Unimplemented" \
+        docstring=r"Return a call expression in the body of this object"
 }
 
 type "Method" {
+    contains "Parameter"
+    contains "Call"
     method "getAParameter" type="Relational<Parameter>" \
         docstring=r"Return any parameter in the method signature; this is intended to be used in a relational context."
     method "getParameter" type="Parameter" status="Unimplemented" {
@@ -29,9 +35,13 @@ type "Method" {
     }
     method "getType" type="Type" status="Unimplemented"
     method "getName" type="string"
+    method "getACall" type="Relational<Call>" status="Unimplemented" \
+        docstring=r"Return a call expression in the body of this object"
 }
 
 type "Callable" {
+    contains "Parameter"
+    contains "Call"
     method "getAParameter" type="Relational<Parameter>" \
         docstring=r"Return any parameter in signature of the callable; this is intended to be used in a relational context."
     method "getParameter" type="Parameter" status="Unimplemented" {
@@ -39,13 +49,31 @@ type "Callable" {
     }
     method "getType" type="Type" status="Unimplemented"
     method "getName" type="string"
+    method "getACall" type="Relational<Call>" status="Unimplemented" \
+        docstring=r"Return a call expression in the body of this object"
 }
 
+// Parameters are *formal* parameters of function definitions/declarations
 type "Parameter" {
     method "getType" type="Type" \
         docstring=r"Return the type of the parameter (`Any` if the language is untyped)."
     method "getName" type="string"
     method "getIndex" type="int" status="Unimplemented"
+}
+
+type "Call" {
+    contains "Expr"
+    method "getArgument" type="Expr" status="Unimplemented" {
+        parameter "index" type="int"
+    }
+    method "getAnArgument" type="Expr" status="Unimplemented"
+    method "getTarget" type="string" status="Unimplemented" \
+        docstring=r"Return the target of the call; this is a string because there is not necessarily a structured declaration available"
+}
+
+type "Expr" {
+    method "isCompileTimeConstant" type="boolean" status="Unimplemented" \
+        docstring=r"Returns `true` if the expression is a literal at compile time"
 }
 
 type "Type" {

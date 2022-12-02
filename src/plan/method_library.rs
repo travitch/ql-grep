@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::query::ir::*;
 use crate::query::val_type::Type;
 use crate::library::Status;
-use crate::library::index::{library_index, MethodIndex, MethodSignature};
+use crate::library::index::{library_index, MethodSignature};
 use crate::plan::NodeFilter;
 use crate::plan::errors::PlanError;
 use crate::plan::interface::{LanguageType, NodeMatcher, TreeInterface};
@@ -154,7 +154,8 @@ fn validate_library(impls : &HashMap<(Type, String), Handler>) {
             None => {
                 panic!("Missing library definition for type `{:?}`", base_type);
             },
-            Some(MethodIndex(ref sigs)) => {
+            Some(ty_index) => {
+                let sigs = &ty_index.method_index;
                 match sigs.get(method_name) {
                     Some(MethodSignature(_name, _arg_types, _ret_type, status)) => {
                         if *status == Some(Status::Unimplemented) {
@@ -169,8 +170,8 @@ fn validate_library(impls : &HashMap<(Type, String), Handler>) {
         }
     }
 
-    for (ty, MethodIndex(method_idx)) in lib_idx {
-        for (method_name, MethodSignature(_name, _arg_types, _ret_type, status)) in method_idx {
+    for (ty, ty_index) in lib_idx {
+        for (method_name, MethodSignature(_name, _arg_types, _ret_type, status)) in &ty_index.method_index {
             // Implemented corresponds to None; in the future, this might be a
             // more complex type (e.g., an ImplementedSince)
             if *status == Some(Status::Unimplemented) {

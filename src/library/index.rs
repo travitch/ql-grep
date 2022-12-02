@@ -1,12 +1,15 @@
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use crate::library;
 use crate::query::val_type::Type;
 
 pub struct MethodSignature(pub String, pub Vec<Type>, pub Type, pub Option<library::Status>);
-pub struct MethodIndex(pub HashMap<String, MethodSignature>);
+pub struct TypeIndex {
+    pub method_index: HashMap<String, MethodSignature>,
+    pub contained_types: HashSet<Type>,
+}
 
 fn build_method_signature(method : &library::Method) -> MethodSignature {
     let mut param_types = Vec::new();
@@ -17,17 +20,20 @@ fn build_method_signature(method : &library::Method) -> MethodSignature {
     MethodSignature(method.name.clone(), param_types, method.type_.clone(), method.status)
 }
 
-fn index_library_type(lib_ty : &library::Type) -> MethodIndex {
+fn index_library_type(lib_ty : &library::Type) -> TypeIndex {
     let mut res = HashMap::new();
     for m in &lib_ty.methods {
         let sig = build_method_signature(m);
         res.insert(m.name.clone(), sig);
     }
 
-    MethodIndex(res)
+    TypeIndex {
+        method_index: res,
+        contained_types: HashSet::from_iter(lib_ty.contains.clone().into_iter().map(|ct| ct.type_)),
+    }
 }
 
-static LIBRARY_INDEX: Lazy<HashMap<Type, MethodIndex>> = Lazy::new(|| {
+static LIBRARY_INDEX: Lazy<HashMap<Type, TypeIndex>> = Lazy::new(|| {
     let mut ty_idx = HashMap::new();
 
     for ty in library::library_types() {
@@ -43,6 +49,6 @@ static LIBRARY_INDEX: Lazy<HashMap<Type, MethodIndex>> = Lazy::new(|| {
 ///
 /// Note that this just panics if it encounters something malformed because it
 /// is just an error in the data file (rather than bad user input).
-pub fn library_index() -> &'static HashMap<Type, MethodIndex> {
+pub fn library_index() -> &'static HashMap<Type, TypeIndex> {
     Lazy::force(&LIBRARY_INDEX)
 }

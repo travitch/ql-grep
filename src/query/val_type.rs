@@ -16,12 +16,14 @@ where
         string("int").map(|_| Type::PrimInteger),
         string("boolean").map(|_| Type::PrimBoolean),
         string("string").map(|_| Type::PrimString),
+        string("Expr").map(|_| Type::Expr),
         string("Function").map(|_| Type::Function),
         string("Method").map(|_| Type::Method),
         string("Parameter").map(|_| Type::Parameter),
         string("Type").map(|_| Type::Type),
         attempt(string("Class").map(|_| Type::Class)),
         attempt(string("Callable").map(|_| Type::Callable)),
+        attempt(string("Call").map(|_| Type::Call)),
         attempt(string("Regex").map(|_| Type::Regex))
     )
 }
@@ -70,6 +72,8 @@ pub enum Type {
     Method,
     Callable,
     Parameter,
+    Call,
+    Expr,
     Field,
     /// Values that appear in a relational context (and might be evaluated as a list or as a logic expression)
     Relational(Box<Type>),
@@ -106,6 +110,8 @@ impl fmt::Display for Type {
             Type::Parameter => write!(f, "Parameter"),
             Type::Type => write!(f, "Type"),
             Type::Class => write!(f, "Class"),
+            Type::Call => write!(f, "Call"),
+            Type::Expr => write!(f, "Expr"),
             Type::Regex => write!(f, "Regex"),
             Type::List(ty) => {
                 write!(f, "List<")?;
@@ -132,6 +138,8 @@ impl Type {
             Type::Class => false,
             Type::Type => false,
             Type::Regex => false,
+            Type::Call => false,
+            Type::Expr => false,
             Type::PrimString => false,
             Type::PrimInteger => false,
             Type::PrimBoolean => false,
@@ -158,6 +166,8 @@ impl Type {
             Type::Method |
             Type::Callable |
             Type::Parameter |
+            Type::Call |
+            Type::Expr |
             Type::Field => self.clone(),
         }
     }
@@ -171,4 +181,14 @@ fn test_parse_prim() {
 #[test]
 fn test_parse_relational() {
     assert!(Type::from_str("Relational<Parameter>") == Ok(Type::Relational(Box::new(Type::Parameter))));
+}
+
+#[test]
+fn test_parse_callable() {
+    assert!(Type::from_str("Callable") == Ok(Type::Callable));
+}
+
+#[test]
+fn test_parse_call() {
+    assert!(Type::from_str("Call") == Ok(Type::Call));
 }

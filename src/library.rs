@@ -66,12 +66,23 @@ pub struct Method {
     pub parameters: Vec<Parameter>,
 }
 
+/// This type is factored out so that we can use the `str` knuffel parser; it
+/// doesn't happen to work in the context of the `children` parser, so we can't
+/// directly have a Vec<val_type::Type> below.
+#[derive(knuffel::Decode, Clone)]
+pub struct ContainedType {
+    #[knuffel(argument, str)]
+    pub type_: val_type::Type
+}
+
 #[derive(knuffel::Decode)]
 pub struct Type {
     #[knuffel(argument)]
     pub name: String,
     #[knuffel(children(name="method"))]
     pub methods: Vec<Method>,
+    #[knuffel(children(name="contains"))]
+    pub contains: Vec<ContainedType>,
 }
 
 /// We want to only reason about the presence/absence of the non-aggregate types
@@ -86,6 +97,8 @@ fn drop_aggregate_types(ty : val_type::Type) -> val_type::Type {
         val_type::Type::Class => ty,
         val_type::Type::Type => ty,
         val_type::Type::Regex => ty,
+        val_type::Type::Expr => ty,
+        val_type::Type::Call => ty,
         val_type::Type::Parameter => ty,
         val_type::Type::PrimString => ty,
         val_type::Type::PrimInteger => ty,
