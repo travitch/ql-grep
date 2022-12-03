@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use crate::library::index::{library_index, MethodSignature};
 use crate::library::Status;
-use crate::plan::errors::PlanError;
-use crate::plan::interface::{LanguageType, NodeMatcher, TreeInterface};
-use crate::plan::NodeFilter;
+use crate::compile::errors::PlanError;
+use crate::compile::interface::{LanguageType, NodeMatcher, TreeInterface};
+use crate::compile::NodeFilter;
 use crate::query::ir::*;
 use crate::query::val_type::Type;
 

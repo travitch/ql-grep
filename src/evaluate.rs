@@ -1,7 +1,7 @@
 use tree_sitter;
 
-use crate::plan::interface::EvaluationContext;
-use crate::plan::{NodeFilter, QueryAction, QueryPlan};
+use crate::compile::interface::EvaluationContext;
+use crate::compile::{NodeFilter, QueryAction, CompiledQuery};
 use crate::query::ir::Constant;
 use crate::source_file;
 
@@ -82,7 +82,7 @@ pub fn evaluate_plan<'a>(
     target: &'a source_file::SourceFile,
     ast: &'a tree_sitter::Tree,
     cursor: &'a mut tree_sitter::QueryCursor,
-    plan: &'a QueryPlan,
+    plan: &'a CompiledQuery,
 ) -> anyhow::Result<Vec<QueryResult>> {
     // FIXME: Add rich error reporting here, with supportive logging in the main driver that consumes these results
     let mut eval_ctx = EvaluationContext::new();

@@ -7,13 +7,13 @@ mod method_library;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::plan::cpp::CPPTreeInterface;
-use crate::plan::errors::PlanError;
-use crate::plan::interface::{
+use crate::compile::cpp::CPPTreeInterface;
+use crate::compile::errors::PlanError;
+use crate::compile::interface::{
     BoundNode, CallableRef, FormalArgument, LanguageType, NodeMatcher, TreeInterface,
 };
-use crate::plan::java::JavaTreeInterface;
-use crate::plan::method_library::{method_impl_for, Handler};
+use crate::compile::java::JavaTreeInterface;
+use crate::compile::method_library::{method_impl_for, Handler};
 use crate::query;
 use crate::query::ir::{
     AggregateOp, CachedRegex, CompOp, Constant, EqualityOp, Expr, Expr_, Repr, Typed,
@@ -73,7 +73,7 @@ pub enum QueryAction {
 }
 
 /// A query plan that can be evaluated to produce a (stream of) results
-pub struct QueryPlan {
+pub struct CompiledQuery {
     pub steps: QueryAction,
 }
 
@@ -558,11 +558,11 @@ where
 /// Query plans are language-specific (because the Tree Sitter grammar for each
 /// language is fairly different). Note that the caller should cache query plans
 /// to avoid recomputing them.
-pub fn build_query_plan<'a>(
+pub fn compile_query<'a>(
     source: &'a SourceFile,
     ast: &'a tree_sitter::Tree,
     query: &'a query::Query<Typed>,
-) -> anyhow::Result<QueryPlan> {
+) -> anyhow::Result<CompiledQuery> {
     // The basic idea is that we want to do as much processing as we can inside
     // of Tree Sitter's query language, as it will be the most efficient.
     //
@@ -590,7 +590,7 @@ pub fn build_query_plan<'a>(
 
     match &query.select.select_exprs[0].expr.expr {
         Expr_::ConstantExpr(v) => {
-            let p = QueryPlan {
+            let p = CompiledQuery {
                 steps: QueryAction::ConstantValue(v.clone()),
             };
             Ok(p)
@@ -613,7 +613,7 @@ pub fn build_query_plan<'a>(
                 }
             }?;
             let bound_node = BoundNode::new(var, ty);
-            let p = QueryPlan {
+            let p = CompiledQuery {
                 steps: QueryAction::TSQuery(flt, ts_query, bound_node),
             };
             Ok(p)
