@@ -1,18 +1,17 @@
-mod cpp;
+mod backend;
 mod errors;
 pub mod interface;
-mod java;
 mod method_library;
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compile::cpp::CPPTreeInterface;
+use crate::compile::backend::cpp::CPPTreeInterface;
+use crate::compile::backend::java::JavaTreeInterface;
 use crate::compile::errors::PlanError;
 use crate::compile::interface::{
     BoundNode, CallableRef, FormalArgument, LanguageType, NodeMatcher, TreeInterface,
 };
-use crate::compile::java::JavaTreeInterface;
 use crate::compile::method_library::{method_impl_for, Handler};
 use crate::query;
 use crate::query::ir::{
