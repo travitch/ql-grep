@@ -5,22 +5,32 @@ use std::str::FromStr;
 use crate::library;
 use crate::query::val_type::Type;
 
-pub struct MethodSignature(pub String, pub Vec<Type>, pub Type, pub Option<library::Status>);
+pub struct MethodSignature(
+    pub String,
+    pub Vec<Type>,
+    pub Type,
+    pub Option<library::Status>,
+);
 pub struct TypeIndex {
     pub method_index: HashMap<String, MethodSignature>,
     pub contained_types: HashSet<Type>,
 }
 
-fn build_method_signature(method : &library::Method) -> MethodSignature {
+fn build_method_signature(method: &library::Method) -> MethodSignature {
     let mut param_types = Vec::new();
     for p in &method.parameters {
         param_types.push(p.type_.clone());
     }
 
-    MethodSignature(method.name.clone(), param_types, method.type_.clone(), method.status)
+    MethodSignature(
+        method.name.clone(),
+        param_types,
+        method.type_.clone(),
+        method.status,
+    )
 }
 
-fn index_library_type(lib_ty : &library::Type) -> TypeIndex {
+fn index_library_type(lib_ty: &library::Type) -> TypeIndex {
     let mut res = HashMap::new();
     for m in &lib_ty.methods {
         let sig = build_method_signature(m);

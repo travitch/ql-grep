@@ -1,40 +1,39 @@
 use std::rc::Rc;
 use tree_sitter::Node;
 
-use crate::query::val_type::Type;
 use crate::plan::interface::*;
+use crate::query::val_type::Type;
 use crate::source_file::SourceFile;
 
-pub struct JavaTreeInterface {
-}
+pub struct JavaTreeInterface {}
 
 impl JavaTreeInterface {
-    pub fn new(_f : &SourceFile) -> Self {
-        JavaTreeInterface {
-        }
+    pub fn new(_f: &SourceFile) -> Self {
+        JavaTreeInterface {}
     }
 }
 
 impl TreeInterface for JavaTreeInterface {
     // FIXME: If we associate the top-level query with the value of a var ref,
     // we get rid of var ref and just have a typed computation
-    fn top_level_type(&self, t : &Type) -> Option<TopLevelMatcher> {
+    fn top_level_type(&self, t: &Type) -> Option<TopLevelMatcher> {
         match t {
             Type::Method => {
                 let matcher = TopLevelMatcher {
                     query: "(method_declaration) @method.declaration".into(),
-                    tag : "@method.declaration".into()
+                    tag: "@method.declaration".into(),
                 };
 
                 Some(matcher)
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
 
-    fn callable_arguments(&self, base : &NodeMatcher<CallableRef>) ->
-        Option<NodeMatcher<Vec<FormalArgument>>>
-    {
+    fn callable_arguments(
+        &self,
+        base: &NodeMatcher<CallableRef>,
+    ) -> Option<NodeMatcher<Vec<FormalArgument>>> {
         let x = Rc::clone(&base.extract);
         let matcher = NodeMatcher {
             extract: Rc::new(move |ctx, source| {
@@ -45,14 +44,14 @@ impl TreeInterface for JavaTreeInterface {
                 let query = tree_sitter::Query::new(node.language(), ql_query)
                     .unwrap_or_else(|e| panic!("Error while querying arguments {:?}", e));
                 let qms = cur.matches(&query, *node, source);
-                qms.map(|m| parameter_node_to_argument(&m.captures[0].node, source)).collect()
-            })
+                qms.map(|m| parameter_node_to_argument(&m.captures[0].node, source))
+                    .collect()
+            }),
         };
         Some(matcher)
     }
 
-    fn callable_name(&self, base : &NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>
-    {
+    fn callable_name(&self, base: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>> {
         let x = Rc::clone(&base.extract);
         let matcher = NodeMatcher {
             extract: Rc::new(move |ctx, source| {
@@ -65,21 +64,21 @@ impl TreeInterface for JavaTreeInterface {
                 let mut qms = cur.matches(&query, *node, source);
                 let m = qms.next().unwrap();
                 callable_name_node_to_string(&m.captures[0].node, source)
-            })
+            }),
         };
         Some(matcher)
     }
 }
 
-fn callable_name_node_to_string(n : &Node, src : & [u8]) -> String {
+fn callable_name_node_to_string(n: &Node, src: &[u8]) -> String {
     n.utf8_text(src).unwrap().into()
 }
 
-fn parse_type_node<'a>(n : &'a Node, src : &'a [u8]) -> LanguageType {
+fn parse_type_node<'a>(n: &'a Node, src: &'a [u8]) -> LanguageType {
     LanguageType::new(n.utf8_text(src).unwrap())
 }
 
-fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgument {
+fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8]) -> FormalArgument {
     let ty_node = n.child_by_field_name("type").unwrap();
     let ty = parse_type_node(&ty_node, src);
     let ident_node = n.child_by_field_name("name").unwrap();
@@ -87,6 +86,6 @@ fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgumen
 
     FormalArgument {
         name: Some(ident.into()),
-        declared_type: Some(ty)
+        declared_type: Some(ty),
     }
 }
