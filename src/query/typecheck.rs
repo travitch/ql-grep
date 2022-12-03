@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::library::index::{library_index, TypeIndex, MethodSignature};
+use crate::library::index::{library_index, MethodSignature, TypeIndex};
 use crate::query::ir::*;
 use crate::query::val_type::Type;
 
@@ -16,7 +16,9 @@ pub enum TypecheckError {
     InvalidMethodForType(String, Type),
     #[error("Invalid arity for method `{0}`; found {1} but expected {2} arguments")]
     InvalidArityForMethod(String, usize, usize),
-    #[error("Invalid type for operand {1} in call to method `{0}`: expected `{3:?}` but found `{2:?}`")]
+    #[error(
+        "Invalid type for operand {1} in call to method `{0}`: expected `{3:?}` but found `{2:?}`"
+    )]
     InvalidTypeForMethodOperand(String, usize, Type, Type),
     #[error("Non-literal regular expression in call to method `{0}` in operand {1}")]
     NonLiteralRegex(String, usize),
@@ -37,10 +39,10 @@ struct TypeEnv {
     type_index: &'static HashMap<Type, TypeIndex>,
 }
 
-fn build_initial_type_environment(syntax : &Select<Syntax>) -> TypeEnv {
+fn build_initial_type_environment(syntax: &Select<Syntax>) -> TypeEnv {
     let mut res = HashMap::new();
 
-     for decl in &syntax.var_decls {
+    for decl in &syntax.var_decls {
         res.insert(decl.name.clone(), decl.type_.clone());
     }
 
@@ -50,16 +52,16 @@ fn build_initial_type_environment(syntax : &Select<Syntax>) -> TypeEnv {
     }
 }
 
-fn evaluates_to_boolean(ty : &Type) -> bool {
+fn evaluates_to_boolean(ty: &Type) -> bool {
     *ty == Type::PrimBoolean || *ty == Type::Relational(Box::new(Type::PrimBoolean))
 }
 
 /// If any of the input types are relational, promote the return type to
 /// a relational type (otherwise just return the scalar return type)
-fn promote_return(scalar_ret_ty : &Type, input_types : &Vec<&Type>) -> Type {
+fn promote_return(scalar_ret_ty: &Type, input_types: &Vec<&Type>) -> Type {
     for inp in input_types {
         if let Type::Relational(_) = inp {
-            return Type::Relational(Box::new(scalar_ret_ty.clone()))
+            return Type::Relational(Box::new(scalar_ret_ty.clone()));
         }
     }
 
@@ -71,76 +73,77 @@ fn promote_return(scalar_ret_ty : &Type, input_types : &Vec<&Type>) -> Type {
 /// There are some operands that we might have to promote implicitly based on
 /// the expected argument types of a method (according to the library).  For
 /// example, we promote strings to regular expressions (by compiling them).
-fn typecheck_operand(method_name : &str,
-                     idx : usize,
-                     typed_expr : &Expr<Typed>,
-                     expected_type : Type) -> anyhow::Result<Expr<Typed>> {
+fn typecheck_operand(
+    method_name: &str,
+    idx: usize,
+    typed_expr: &Expr<Typed>,
+    expected_type: Type,
+) -> anyhow::Result<Expr<Typed>> {
     match (typed_expr.type_.clone(), expected_type) {
         (Type::PrimString, Type::Regex) => {
             // We do an implicit promotion (since there is no other way to construct these values)
             match &typed_expr.expr {
                 Expr_::ConstantExpr(Constant::String_(s)) => {
-                    let rx = regex::Regex::new(s).map_err(|rx_err| anyhow::anyhow!(TypecheckError::InvalidRegularExpression(method_name.into(), rx_err)))?;
+                    let rx = regex::Regex::new(s).map_err(|rx_err| {
+                        anyhow::anyhow!(TypecheckError::InvalidRegularExpression(
+                            method_name.into(),
+                            rx_err
+                        ))
+                    })?;
                     let rx_val = CachedRegex(s.clone(), rx);
                     let tv = Expr {
                         expr: Expr_::ConstantExpr(Constant::Regex(rx_val)),
-                        type_: Type::Regex
+                        type_: Type::Regex,
                     };
                     Ok(tv)
-                },
-                _ => {
-                    Err(anyhow::anyhow!(TypecheckError::NonLiteralRegex(method_name.into(), idx)))
                 }
+                _ => Err(anyhow::anyhow!(TypecheckError::NonLiteralRegex(
+                    method_name.into(),
+                    idx
+                ))),
             }
-        },
+        }
         (t1, t2) => {
             if t1 == t2 {
                 Ok(typed_expr.clone())
             } else {
-                let err = TypecheckError::InvalidTypeForMethodOperand(method_name.into(), idx, t1, t2);
+                let err =
+                    TypecheckError::InvalidTypeForMethodOperand(method_name.into(), idx, t1, t2);
                 Err(anyhow::anyhow!(err))
             }
         }
     }
 }
 
-fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Expr<Typed>> {
+fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr<Typed>> {
     match &expr.expr {
-        Expr_::ConstantExpr(c) => {
-            match c {
-                Constant::Boolean(_) => {
-                    Ok(Expr {
-                        expr: Expr_::ConstantExpr(c.clone()),
-                        type_: Type::PrimBoolean
-                    })
-                },
-                Constant::Integer(_) => {
-                    Ok(Expr {
-                        expr: Expr_::ConstantExpr(c.clone()),
-                        type_: Type::PrimInteger
-                    })
-                },
-                Constant::String_(_) => {
-                    Ok(Expr {
-                        expr: Expr_::ConstantExpr(c.clone()),
-                        type_: Type::PrimString
-                    })
-                },
-                Constant::Regex(_) => {
-                    Ok(Expr {
-                        expr: Expr_::ConstantExpr(c.clone()),
-                        type_: Type::Regex
-                    })
-                }
-            }
+        Expr_::ConstantExpr(c) => match c {
+            Constant::Boolean(_) => Ok(Expr {
+                expr: Expr_::ConstantExpr(c.clone()),
+                type_: Type::PrimBoolean,
+            }),
+            Constant::Integer(_) => Ok(Expr {
+                expr: Expr_::ConstantExpr(c.clone()),
+                type_: Type::PrimInteger,
+            }),
+            Constant::String_(_) => Ok(Expr {
+                expr: Expr_::ConstantExpr(c.clone()),
+                type_: Type::PrimString,
+            }),
+            Constant::Regex(_) => Ok(Expr {
+                expr: Expr_::ConstantExpr(c.clone()),
+                type_: Type::Regex,
+            }),
         },
         Expr_::VarRef(var_name) => {
-            let ty = env.env.get(var_name).ok_or_else(|| anyhow::anyhow!(TypecheckError::MissingVariableDeclaration(var_name.into())))?;
+            let ty = env.env.get(var_name).ok_or_else(|| {
+                anyhow::anyhow!(TypecheckError::MissingVariableDeclaration(var_name.into()))
+            })?;
             Ok(Expr {
                 expr: Expr_::VarRef(var_name.into()),
-                type_: ty.clone()
+                type_: ty.clone(),
             })
-        },
+        }
         Expr_::RelationalComparison(lhs, op, rhs) => {
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
@@ -153,33 +156,50 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             // not until there is a need.
             match (&lhs_ty.type_, &rhs_ty.type_) {
                 (Type::PrimInteger, Type::PrimInteger) => (),
-                (Type::Relational(t), Type::PrimInteger) => {
-                    match **t {
-                        Type::PrimInteger => (),
-                        _ => {
-                            return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), Type::Relational(t.clone()), *rhs.clone(), Type::PrimInteger)));
-                        }
+                (Type::Relational(t), Type::PrimInteger) => match **t {
+                    Type::PrimInteger => (),
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            TypecheckError::InvalidRelationalComparison(
+                                *lhs.clone(),
+                                Type::Relational(t.clone()),
+                                *rhs.clone(),
+                                Type::PrimInteger
+                            )
+                        ));
                     }
                 },
-                (Type::PrimInteger, Type::Relational(t)) => {
-                    match **t {
-                        Type::PrimInteger => (),
-                        _ => {
-                            return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), Type::PrimInteger, *rhs.clone(), Type::Relational(t.clone()))));
-                        }
+                (Type::PrimInteger, Type::Relational(t)) => match **t {
+                    Type::PrimInteger => (),
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            TypecheckError::InvalidRelationalComparison(
+                                *lhs.clone(),
+                                Type::PrimInteger,
+                                *rhs.clone(),
+                                Type::Relational(t.clone())
+                            )
+                        ));
                     }
                 },
                 (lt, rt) => {
-                    return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), lt.clone(), *rhs.clone(), rt.clone())));
+                    return Err(anyhow::anyhow!(
+                        TypecheckError::InvalidRelationalComparison(
+                            *lhs.clone(),
+                            lt.clone(),
+                            *rhs.clone(),
+                            rt.clone()
+                        )
+                    ));
                 }
             }
 
             let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::RelationalComparison(Box::new(lhs_ty), *op, Box::new(rhs_ty)),
-                type_: ret_ty
+                type_: ret_ty,
             })
-        },
+        }
         Expr_::EqualityComparison(lhs, op, rhs) => {
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
@@ -187,52 +207,75 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             // The actual check is to ensure that the comparison operators are
             // actually used safely.
             if lhs_ty.type_.base_if_relational() != rhs_ty.type_.base_if_relational() {
-                return Err(anyhow::anyhow!(TypecheckError::InvalidRelationalComparison(*lhs.clone(), lhs_ty.type_, *rhs.clone(), rhs_ty.type_)));
+                return Err(anyhow::anyhow!(
+                    TypecheckError::InvalidRelationalComparison(
+                        *lhs.clone(),
+                        lhs_ty.type_,
+                        *rhs.clone(),
+                        rhs_ty.type_
+                    )
+                ));
             }
 
             let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::EqualityComparison(Box::new(lhs_ty), *op, Box::new(rhs_ty)),
-                type_: ret_ty
+                type_: ret_ty,
             })
-        },
+        }
         Expr_::LogicalConjunction(lhs, rhs) => {
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
 
-            if ! evaluates_to_boolean(&lhs_ty.type_) {
-                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*lhs.clone(), Type::PrimBoolean, lhs_ty.type_)));
+            if !evaluates_to_boolean(&lhs_ty.type_) {
+                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(
+                    *lhs.clone(),
+                    Type::PrimBoolean,
+                    lhs_ty.type_
+                )));
             }
 
-            if ! evaluates_to_boolean(&rhs_ty.type_) {
-                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*rhs.clone(), Type::PrimBoolean, rhs_ty.type_)));
+            if !evaluates_to_boolean(&rhs_ty.type_) {
+                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(
+                    *rhs.clone(),
+                    Type::PrimBoolean,
+                    rhs_ty.type_
+                )));
             }
 
             let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::LogicalConjunction(Box::new(lhs_ty), Box::new(rhs_ty)),
-                type_: ret_ty
+                type_: ret_ty,
             })
-        },
+        }
         Expr_::LogicalDisjunction(lhs, rhs) => {
             // Either operand (or both) may be Relational<bool>, in which case we treat that as any(val)
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
 
-            if ! evaluates_to_boolean(&lhs_ty.type_) {
-                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*lhs.clone(), Type::PrimBoolean, lhs_ty.type_)));
+            if !evaluates_to_boolean(&lhs_ty.type_) {
+                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(
+                    *lhs.clone(),
+                    Type::PrimBoolean,
+                    lhs_ty.type_
+                )));
             }
 
-            if ! evaluates_to_boolean(&rhs_ty.type_) {
-                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(*rhs.clone(), Type::PrimBoolean, rhs_ty.type_)));
+            if !evaluates_to_boolean(&rhs_ty.type_) {
+                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(
+                    *rhs.clone(),
+                    Type::PrimBoolean,
+                    rhs_ty.type_
+                )));
             }
 
             let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::LogicalDisjunction(Box::new(lhs_ty), Box::new(rhs_ty)),
-                type_: ret_ty
+                type_: ret_ty,
             })
-        },
+        }
         Expr_::Aggregate(op, exprs) => {
             let mut typed_exprs = Vec::new();
             for expr in exprs {
@@ -251,24 +294,28 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
                     // either a list or a relational value (which will be
                     // evaluated as a list)
                     if typed_exprs.len() != 1 {
-                        return Err(anyhow::anyhow!(TypecheckError::TooManyArgumentsForCount(typed_exprs.len())));
+                        return Err(anyhow::anyhow!(TypecheckError::TooManyArgumentsForCount(
+                            typed_exprs.len()
+                        )));
                     }
 
                     match &typed_exprs[0].expr.type_ {
                         Type::List(_) => Type::PrimInteger,
                         Type::Relational(_) => Type::PrimInteger,
                         ty => {
-                            return Err(anyhow::anyhow!(TypecheckError::InvalidOperandTypeForCount(ty.clone())));
+                            return Err(anyhow::anyhow!(
+                                TypecheckError::InvalidOperandTypeForCount(ty.clone())
+                            ));
                         }
                     }
-                },
+                }
             };
 
             Ok(Expr {
                 expr: Expr_::Aggregate(*op, typed_exprs),
-                type_: ty
+                type_: ty,
             })
-        },
+        }
         Expr_::QualifiedAccess(base, accessor, operands) => {
             let mut typed_operands = Vec::new();
             for op in operands {
@@ -283,14 +330,27 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             // evaluate it as a List<T>).
             let scalar_base_ty = base_ty.type_.base_if_relational();
 
-            let ty_index = env.type_index.get(&scalar_base_ty)
-                .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidReceiverTypeForMethod(base_ty.type_.clone(), accessor.clone())))?;
+            let ty_index = env.type_index.get(&scalar_base_ty).ok_or_else(|| {
+                anyhow::anyhow!(TypecheckError::InvalidReceiverTypeForMethod(
+                    base_ty.type_.clone(),
+                    accessor.clone()
+                ))
+            })?;
             let method_idx = &ty_index.method_index;
-            let MethodSignature(method_name, arg_types, ret_ty, _status) = method_idx.get(accessor)
-                .ok_or_else(|| anyhow::anyhow!(TypecheckError::InvalidMethodForType(accessor.clone(), base_ty.type_.clone())))?;
+            let MethodSignature(method_name, arg_types, ret_ty, _status) =
+                method_idx.get(accessor).ok_or_else(|| {
+                    anyhow::anyhow!(TypecheckError::InvalidMethodForType(
+                        accessor.clone(),
+                        base_ty.type_.clone()
+                    ))
+                })?;
 
             if operands.len() != arg_types.len() {
-                let err = TypecheckError::InvalidArityForMethod(method_name.into(), operands.len(), arg_types.len());
+                let err = TypecheckError::InvalidArityForMethod(
+                    method_name.into(),
+                    operands.len(),
+                    arg_types.len(),
+                );
                 return Err(anyhow::anyhow!(err));
             }
 
@@ -322,17 +382,21 @@ fn typecheck_expr(env : &mut TypeEnv, expr : &Expr<Syntax>) -> anyhow::Result<Ex
             };
 
             Ok(Expr {
-                expr: Expr_::QualifiedAccess(Box::new(base_ty), accessor.clone(), promoted_operands),
-                type_: promoted_ret_ty
+                expr: Expr_::QualifiedAccess(
+                    Box::new(base_ty),
+                    accessor.clone(),
+                    promoted_operands,
+                ),
+                type_: promoted_ret_ty,
             })
-        },
+        }
     }
 }
 
-fn typecheck_as_expr(env : &mut TypeEnv, as_expr : &AsExpr<Syntax>) -> anyhow::Result<AsExpr<Typed>> {
+fn typecheck_as_expr(env: &mut TypeEnv, as_expr: &AsExpr<Syntax>) -> anyhow::Result<AsExpr<Typed>> {
     let typed_expr = typecheck_expr(env, &as_expr.expr)?;
     match &as_expr.ident {
-        None => {},
+        None => {}
         Some(name) => {
             env.env.insert(name.clone(), typed_expr.type_.clone());
         }
@@ -349,7 +413,7 @@ fn typecheck_as_expr(env : &mut TypeEnv, as_expr : &AsExpr<Syntax>) -> anyhow::R
 ///
 /// The return types for methods (which are otherwise not obvious) are
 /// automatically derived from the documentation (see `library.kdl`)
-pub fn typecheck_query(syntax : Select<Syntax>) -> anyhow::Result<Select<Typed>> {
+pub fn typecheck_query(syntax: Select<Syntax>) -> anyhow::Result<Select<Typed>> {
     // Note that the type environment never really updates because new
     // identifiers are not introduced outside of the declaration clause
     //
@@ -367,7 +431,7 @@ pub fn typecheck_query(syntax : Select<Syntax>) -> anyhow::Result<Select<Typed>>
 
     let mut typed_where = None;
     match syntax.where_formula {
-        None => {},
+        None => {}
         Some(f) => {
             let typed_f = typecheck_expr(&mut type_env, &f)?;
             typed_where = Some(typed_f);

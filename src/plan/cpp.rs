@@ -1,38 +1,38 @@
 use std::rc::Rc;
 use tree_sitter::Node;
 
+use crate::plan::interface::*;
 use crate::query::parser::get_child_of_kind;
 use crate::query::val_type::Type;
-use crate::plan::interface::*;
 use crate::source_file::SourceFile;
 
-pub struct CPPTreeInterface {
-}
+pub struct CPPTreeInterface {}
 
 impl CPPTreeInterface {
-    pub fn new(_f : &SourceFile) -> Self {
-        CPPTreeInterface {
-        }
+    pub fn new(_f: &SourceFile) -> Self {
+        CPPTreeInterface {}
     }
 }
 
 impl TreeInterface for CPPTreeInterface {
-    fn top_level_type(&self, t : &Type) -> Option<TopLevelMatcher> {
+    fn top_level_type(&self, t: &Type) -> Option<TopLevelMatcher> {
         match t {
             Type::Function => {
                 let matcher = TopLevelMatcher {
                     query: "(function_definition) @function.definition".into(),
-                    tag : "@function.definition".into()
+                    tag: "@function.definition".into(),
                 };
 
                 Some(matcher)
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
 
-    fn callable_arguments(&self, base : &NodeMatcher<CallableRef>) -> Option<NodeMatcher<Vec<FormalArgument>>>
-    {
+    fn callable_arguments(
+        &self,
+        base: &NodeMatcher<CallableRef>,
+    ) -> Option<NodeMatcher<Vec<FormalArgument>>> {
         let x = Rc::clone(&base.extract);
         let matcher = NodeMatcher {
             extract: Rc::new(move |ctx, source| {
@@ -43,14 +43,14 @@ impl TreeInterface for CPPTreeInterface {
                 let query = tree_sitter::Query::new(node.language(), ql_query)
                     .unwrap_or_else(|e| panic!("Error while querying arguments {:?}", e));
                 let qms = cur.matches(&query, *node, source);
-                qms.map(|m| parameter_node_to_argument(&m.captures[0].node, source)).collect()
-            })
+                qms.map(|m| parameter_node_to_argument(&m.captures[0].node, source))
+                    .collect()
+            }),
         };
         Some(matcher)
     }
 
-    fn callable_name(&self, base : &NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>
-    {
+    fn callable_name(&self, base: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>> {
         let x = Rc::clone(&base.extract);
         let matcher = NodeMatcher {
             extract: Rc::new(move |ctx, source| {
@@ -63,13 +63,13 @@ impl TreeInterface for CPPTreeInterface {
                 let mut qms = cur.matches(&query, *node, source);
                 let m = qms.next().unwrap();
                 callable_name_node_to_string(&m.captures[0].node, source)
-            })
+            }),
         };
         Some(matcher)
     }
 }
 
-fn callable_name_node_to_string(n : &Node, src : & [u8]) -> String {
+fn callable_name_node_to_string(n: &Node, src: &[u8]) -> String {
     n.utf8_text(src).unwrap().into()
 }
 
@@ -83,7 +83,7 @@ fn callable_name_node_to_string(n : &Node, src : & [u8]) -> String {
 /// This takes an optional declarator to enable us to capture pointer types and
 /// modify the textual type, as the tree-sitter parser splits the pointer
 /// declarator out.
-fn parse_type_node<'a>(decl : &Option<Declarator>, n : &'a Node, src : &'a [u8]) -> LanguageType {
+fn parse_type_node<'a>(decl: &Option<Declarator>, n: &'a Node, src: &'a [u8]) -> LanguageType {
     let mut s = String::new();
 
     s.push_str(n.utf8_text(src).unwrap());
@@ -102,7 +102,7 @@ enum Declarator {
     Array(Box<Declarator>),
     Function(Box<Declarator>),
     Unnamed,
-    Ident(String)
+    Ident(String),
 }
 
 impl Declarator {
@@ -118,31 +118,31 @@ impl Declarator {
         }
     }
 
-    fn append_declarators(&self, s : &mut String) {
+    fn append_declarators(&self, s: &mut String) {
         match self {
-            Declarator::Ident(_) => {},
+            Declarator::Ident(_) => {}
             Declarator::Pointer(d) => {
                 s.push('*');
                 d.append_declarators(s);
-            },
+            }
             Declarator::Function(_) => {
                 // FIXME
                 s.push_str("function-pointer");
-            },
+            }
             Declarator::Array(d) => {
                 s.push_str("[]");
                 d.append_declarators(s);
-            },
+            }
             Declarator::Reference(d) => {
                 s.push('&');
                 d.append_declarators(s);
             }
-            Declarator::Unnamed => {},
+            Declarator::Unnamed => {}
         }
     }
 }
 
-fn parse_declarator<'a>(n : &'a Node, src : &'a [u8]) -> Declarator {
+fn parse_declarator<'a>(n: &'a Node, src: &'a [u8]) -> Declarator {
     // This node can either be an identifier (the name of the declarator) or a
     // pointer wrapper
     match n.kind() {
@@ -150,53 +150,47 @@ fn parse_declarator<'a>(n : &'a Node, src : &'a [u8]) -> Declarator {
         "array_declarator" => {
             let next_child = n.child_by_field_name("declarator").unwrap();
             Declarator::Array(Box::new(parse_declarator(&next_child, src)))
-        },
+        }
         "pointer_declarator" => {
             let next_child = n.child_by_field_name("declarator").unwrap();
             Declarator::Pointer(Box::new(parse_declarator(&next_child, src)))
-        },
+        }
         "function_declarator" => {
             // This is a parenthesized declarator that we can skip for now
             let next_child = n.child_by_field_name("declarator").unwrap();
             let next_declarator_child = get_child_of_kind(next_child, "pointer_declarator");
             match next_declarator_child {
-                Err(_) => {
-                    parse_declarator(&next_child, src)
-                },
+                Err(_) => parse_declarator(&next_child, src),
                 Ok(next_child) => {
                     Declarator::Function(Box::new(parse_declarator(&next_child, src)))
                 }
             }
-        },
+        }
         "reference_declarator" => {
             let next_child = get_child_of_kind(*n, "identifier").unwrap();
             Declarator::Reference(Box::new(parse_declarator(&next_child, src)))
         }
-        "abstract_pointer_declarator" => {
-            Declarator::Unnamed
-        },
-        "abstract_function_declarator" => {
-            Declarator::Unnamed
-        },
-        "abstract_array_declarator" => {
-            Declarator::Unnamed
-        },
+        "abstract_pointer_declarator" => Declarator::Unnamed,
+        "abstract_function_declarator" => Declarator::Unnamed,
+        "abstract_array_declarator" => Declarator::Unnamed,
         "parenthesized_declarator" => {
             // FIXME: Figure out what this actually is
             Declarator::Unnamed
-        },
+        }
         k => {
             panic!("Unsupported C/C++ declarator type `{}`", k);
         }
     }
 }
 
-fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgument {
-    let decl = n.child_by_field_name("declarator").map(|n| parse_declarator(&n, src));
+fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8]) -> FormalArgument {
+    let decl = n
+        .child_by_field_name("declarator")
+        .map(|n| parse_declarator(&n, src));
     let ty_node = n.child_by_field_name("type");
     let ty = ty_node.map(|s| parse_type_node(&decl, &s, src));
     FormalArgument {
         name: decl.map(|d| d.type_name().into()),
-        declared_type: ty
+        declared_type: ty,
     }
 }

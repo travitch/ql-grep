@@ -1,6 +1,6 @@
-use tree_sitter::Node;
 use std::collections::HashMap;
 use std::rc::Rc;
+use tree_sitter::Node;
 
 use crate::query::val_type::Type;
 
@@ -9,12 +9,11 @@ pub struct TopLevelMatcher {
     ///
     /// A "top-level" structure is a type declared in the From clause of the QL
     /// query that will ultimately be returned to the user.
-    pub query : String,
+    pub query: String,
     /// This is the name given to the top-level entity in the query, in case it
     /// needs to be referenced later.
-    pub tag : String
+    pub tag: String,
 }
-
 
 /// A reference type intended to be held in NodeFilters and related types
 ///
@@ -30,7 +29,7 @@ pub struct TopLevelMatcher {
 pub struct CallableRef(String);
 
 impl CallableRef {
-    pub fn new(var_name : &str) -> Self {
+    pub fn new(var_name: &str) -> Self {
         CallableRef(var_name.into())
     }
 }
@@ -48,12 +47,12 @@ impl BoundNode {
     ///
     /// Not everything is supported here (just what would appear in a select
     /// clause)
-    pub fn new(name : &str, ty : &Type) -> Self {
+    pub fn new(name: &str, ty: &Type) -> Self {
         match ty {
             Type::Callable => BoundNode::Callable(CallableRef(name.into())),
             Type::Function => BoundNode::Callable(CallableRef(name.into())),
             Type::Method => BoundNode::Callable(CallableRef(name.into())),
-            _ => panic!("Unimplemented BoundNode type `{}`", ty)
+            _ => panic!("Unimplemented BoundNode type `{}`", ty),
         }
     }
 }
@@ -79,15 +78,15 @@ impl<'a> EvaluationContext<'a> {
     ///
     /// This panics if there is no corresponding map entry, as it is a
     /// programming error
-    pub fn lookup_callable(&self, cr : &CallableRef) -> &Node<'a> {
+    pub fn lookup_callable(&self, cr: &CallableRef) -> &Node<'a> {
         self.callables.get(cr).unwrap()
     }
 
-    pub fn bind_node(&mut self, binder : &BoundNode, n : Node<'a>) {
+    pub fn bind_node(&mut self, binder: &BoundNode, n: Node<'a>) {
         match binder {
             BoundNode::Callable(CallableRef(name)) => {
                 self.callables.insert(CallableRef(name.into()), n);
-            },
+            }
         }
     }
 
@@ -109,7 +108,7 @@ impl<'a> EvaluationContext<'a> {
 /// FIXME: Add another field that records ranges to highlight in results (i.e.,
 /// the code that contributes to a Node being included)
 pub struct NodeMatcher<R> {
-    pub extract : Rc<dyn for <'a> Fn(&'a EvaluationContext<'a>, &'a [u8]) -> R>
+    pub extract: Rc<dyn for<'a> Fn(&'a EvaluationContext<'a>, &'a [u8]) -> R>,
 }
 
 /// A representation of language-level types (e.g., Java or C types)
@@ -120,7 +119,7 @@ pub struct NodeMatcher<R> {
 pub struct LanguageType(String);
 
 impl LanguageType {
-    pub fn new(name : &str) -> Self {
+    pub fn new(name: &str) -> Self {
         LanguageType(name.into())
     }
 
@@ -137,8 +136,8 @@ impl LanguageType {
 /// The type is optional because some languages are untyped.
 #[derive(Clone, Debug)]
 pub struct FormalArgument {
-    pub name : Option<String>,
-    pub declared_type : Option<LanguageType>
+    pub name: Option<String>,
+    pub declared_type: Option<LanguageType>,
 }
 
 /// The interface for generating tree matchers for each language
@@ -154,15 +153,18 @@ pub trait TreeInterface {
     ///
     /// This can fail if the given type is not supported for the language
     /// implementing this interface.
-    fn top_level_type(&self, t : &Type) -> Option<TopLevelMatcher>;
+    fn top_level_type(&self, t: &Type) -> Option<TopLevelMatcher>;
 
     /// A node matcher that extracts formal arguments from a callable node
     /// (e.g., a method or function)
-    fn callable_arguments(&self, node : &NodeMatcher<CallableRef>) -> Option<NodeMatcher<Vec<FormalArgument>>>;
+    fn callable_arguments(
+        &self,
+        node: &NodeMatcher<CallableRef>,
+    ) -> Option<NodeMatcher<Vec<FormalArgument>>>;
 
     /// A node matcher that extracts the name of a callable node.
     ///
     /// This is tailored to just callables because getting the name of other
     /// types of nodes requires different patterns
-    fn callable_name(&self, node : &NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>;
+    fn callable_name(&self, node: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>;
 }

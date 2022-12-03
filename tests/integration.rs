@@ -1,16 +1,16 @@
 #![cfg(test)]
-use crossbeam_channel::{Sender, bounded};
+use crossbeam_channel::{bounded, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 use serde::Deserialize;
-use test_generator::test_resources;
 use std::thread;
+use test_generator::test_resources;
 use toml::de;
 
-use ql_grep::query::{Query, parse_query};
+use ql_grep::evaluate::{evaluate_plan, QueryResult};
+use ql_grep::plan::build_query_plan;
 use ql_grep::query::ir::Typed;
 use ql_grep::query::typecheck::typecheck_query;
-use ql_grep::plan::build_query_plan;
-use ql_grep::evaluate::{QueryResult, evaluate_plan};
+use ql_grep::query::{parse_query, Query};
 use ql_grep::source_file::SourceFile;
 
 /// A single test case to run ql-grep over, with expected results
@@ -25,33 +25,32 @@ struct TestCase {
 }
 
 struct QueryResults {
-    results : Vec<QueryResult>,
-    source_file : SourceFile
+    results: Vec<QueryResult>,
+    source_file: SourceFile,
 }
 
 struct Statistics {
-    num_files_parsed : usize,
-    num_matches : usize
+    num_files_parsed: usize,
+    num_matches: usize,
 }
 
 impl Statistics {
     fn new() -> Self {
         Statistics {
             num_files_parsed: 0,
-            num_matches: 0
+            num_matches: 0,
         }
     }
 }
 
-fn visit_file(query : &Query<Typed>,
-              send : Sender<QueryResults>,
-              ent : Result<DirEntry, ignore::Error>) -> WalkState
-{
+fn visit_file(
+    query: &Query<Typed>,
+    send: Sender<QueryResults>,
+    ent: Result<DirEntry, ignore::Error>,
+) -> WalkState {
     let dir_ent = ent.unwrap();
     match SourceFile::new(dir_ent.path()) {
-        Err(_) => {
-
-        },
+        Err(_) => {}
         Ok((sf, ast)) => {
             let mut res_storage = Vec::new();
             {
@@ -63,21 +62,20 @@ fn visit_file(query : &Query<Typed>,
             // Send the result to the aggregation thread
             let qr = QueryResults {
                 results: res_storage,
-                source_file: sf
+                source_file: sf,
             };
             let _ = send.send(qr);
         }
     }
 
-
-
     WalkState::Continue
 }
 
 #[test_resources("tests/integration/*.toml")]
-fn execute_query(toml_file_path : &str) {
-    let toml_file_contents = std::fs::read_to_string::<std::path::PathBuf>(toml_file_path.into()).unwrap();
-    let test_case : TestCase = de::from_str(&toml_file_contents).unwrap();
+fn execute_query(toml_file_path: &str) {
+    let toml_file_contents =
+        std::fs::read_to_string::<std::path::PathBuf>(toml_file_path.into()).unwrap();
+    let test_case: TestCase = de::from_str(&toml_file_contents).unwrap();
 
     let mut root_dir = std::env::current_dir().unwrap();
     root_dir.push("tests");
@@ -99,7 +97,9 @@ fn execute_query(toml_file_path : &str) {
         loop {
             let item = recv.recv();
             match item {
-                Err(_) => { break ; },
+                Err(_) => {
+                    break;
+                }
                 Ok(qr) => {
                     stats.num_files_parsed += 1;
                     stats.num_matches += qr.results.len();
@@ -124,7 +124,7 @@ fn execute_query(toml_file_path : &str) {
     match accumulator_handle.join() {
         Err(err) => {
             std::panic::resume_unwind(err);
-        },
+        }
         Ok(result) => {
             assert_eq!(result.num_matches, test_case.num_matches);
         }

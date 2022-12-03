@@ -1,7 +1,7 @@
-use combine::parser::char::{string};
-use combine::{EasyParser, Parser, ParseError, Stream};
-use combine::{between, choice, parser};
+use combine::parser::char::string;
 use combine::parser::combinator::attempt;
+use combine::{between, choice, parser};
+use combine::{EasyParser, ParseError, Parser, Stream};
 use std::fmt;
 use std::str::FromStr;
 use thiserror::Error;
@@ -34,8 +34,16 @@ where
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
 {
     choice!(
-        (string("List"), between(string("<"), string(">"), type_parser())).map(|(_, ty)| Type::List(Box::new(ty))),
-        (string("Relational"), between(string("<"), string(">"), type_parser())).map(|(_, ty)| Type::Relational(Box::new(ty)))
+        (
+            string("List"),
+            between(string("<"), string(">"), type_parser())
+        )
+            .map(|(_, ty)| Type::List(Box::new(ty))),
+        (
+            string("Relational"),
+            between(string("<"), string(">"), type_parser())
+        )
+            .map(|(_, ty)| Type::Relational(Box::new(ty)))
     )
 }
 
@@ -78,18 +86,18 @@ pub enum Type {
     /// Values that appear in a relational context (and might be evaluated as a list or as a logic expression)
     Relational(Box<Type>),
     /// A list of values
-    List(Box<Type>)
+    List(Box<Type>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum TypeParseError {
     #[error("Error parsing type")]
-    TypeParseError
+    TypeParseError,
 }
 
 impl FromStr for Type {
     type Err = TypeParseError;
-    fn from_str(s : &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         type_parser()
             .easy_parse(combine::stream::position::Stream::new(s))
             .map(|res| res.0)
@@ -117,12 +125,12 @@ impl fmt::Display for Type {
                 write!(f, "List<")?;
                 ty.fmt(f)?;
                 write!(f, ">")
-            },
+            }
             Type::Relational(ty) => {
                 write!(f, "Relational<")?;
                 ty.fmt(f)?;
                 write!(f, ">")
-            },
+            }
         }
     }
 }
@@ -155,20 +163,20 @@ impl Type {
     pub fn base_if_relational(&self) -> Type {
         match self {
             Type::Relational(inner_ty) => inner_ty.as_ref().clone(),
-            Type::List(_) |
-            Type::PrimInteger |
-            Type::PrimBoolean |
-            Type::PrimString |
-            Type::Regex |
-            Type::Type |
-            Type::Class |
-            Type::Function |
-            Type::Method |
-            Type::Callable |
-            Type::Parameter |
-            Type::Call |
-            Type::Expr |
-            Type::Field => self.clone(),
+            Type::List(_)
+            | Type::PrimInteger
+            | Type::PrimBoolean
+            | Type::PrimString
+            | Type::Regex
+            | Type::Type
+            | Type::Class
+            | Type::Function
+            | Type::Method
+            | Type::Callable
+            | Type::Parameter
+            | Type::Call
+            | Type::Expr
+            | Type::Field => self.clone(),
         }
     }
 }
@@ -180,7 +188,9 @@ fn test_parse_prim() {
 
 #[test]
 fn test_parse_relational() {
-    assert!(Type::from_str("Relational<Parameter>") == Ok(Type::Relational(Box::new(Type::Parameter))));
+    assert!(
+        Type::from_str("Relational<Parameter>") == Ok(Type::Relational(Box::new(Type::Parameter)))
+    );
 }
 
 #[test]

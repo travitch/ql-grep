@@ -2,7 +2,6 @@
 ///
 /// The actual definitions and types are provided by the doc/library.kdl file,
 /// which is both documentation and the source of truth for the type checker.
-
 pub mod index;
 
 use knuffel;
@@ -19,7 +18,7 @@ pub const LIBRARY_DATA: &str = include_str!("../doc/library.kdl");
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     Unimplemented,
-    Deprecated
+    Deprecated,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -39,7 +38,7 @@ impl FromStr for Status {
         match s {
             "Unimplemented" => Ok(Status::Unimplemented),
             "Deprecated" => Ok(Status::Deprecated),
-            _ => Err(StatusParseError)
+            _ => Err(StatusParseError),
         }
     }
 }
@@ -48,7 +47,7 @@ impl FromStr for Status {
 pub struct Parameter {
     #[knuffel(argument)]
     pub name: String,
-    #[knuffel(property(name="type"), str)]
+    #[knuffel(property(name = "type"), str)]
     pub type_: val_type::Type,
 }
 
@@ -56,13 +55,13 @@ pub struct Parameter {
 pub struct Method {
     #[knuffel(argument)]
     pub name: String,
-    #[knuffel(property(name="type"), str)]
+    #[knuffel(property(name = "type"), str)]
     pub type_: val_type::Type,
     #[knuffel(property, str)]
     pub status: Option<Status>,
     #[knuffel(property)]
     pub docstring: Option<String>,
-    #[knuffel(children(name="parameter"))]
+    #[knuffel(children(name = "parameter"))]
     pub parameters: Vec<Parameter>,
 }
 
@@ -72,23 +71,23 @@ pub struct Method {
 #[derive(knuffel::Decode, Clone)]
 pub struct ContainedType {
     #[knuffel(argument, str)]
-    pub type_: val_type::Type
+    pub type_: val_type::Type,
 }
 
 #[derive(knuffel::Decode)]
 pub struct Type {
     #[knuffel(argument)]
     pub name: String,
-    #[knuffel(children(name="method"))]
+    #[knuffel(children(name = "method"))]
     pub methods: Vec<Method>,
-    #[knuffel(children(name="contains"))]
+    #[knuffel(children(name = "contains"))]
     pub contains: Vec<ContainedType>,
 }
 
 /// We want to only reason about the presence/absence of the non-aggregate types
 /// so we remove any `List` or `Relational` type constructors.  Other types are
 /// returned as-is.
-fn drop_aggregate_types(ty : val_type::Type) -> val_type::Type {
+fn drop_aggregate_types(ty: val_type::Type) -> val_type::Type {
     match ty {
         val_type::Type::Function => ty,
         val_type::Type::Method => ty,
@@ -108,14 +107,17 @@ fn drop_aggregate_types(ty : val_type::Type) -> val_type::Type {
     }
 }
 
-fn validate_parameter(seen_types : &HashSet<val_type::Type>, m : &Method, p : &Parameter) {
+fn validate_parameter(seen_types: &HashSet<val_type::Type>, m: &Method, p: &Parameter) {
     let p_ty = drop_aggregate_types(p.type_.clone());
     if seen_types.get(&p_ty).is_none() {
-        panic!("Parameter {} in {} references undefined type {}", p.name, m.name, p.type_);
+        panic!(
+            "Parameter {} in {} references undefined type {}",
+            p.name, m.name, p.type_
+        );
     }
 }
 
-fn validate_method(seen_types : &HashSet<val_type::Type>, m : &Method) {
+fn validate_method(seen_types: &HashSet<val_type::Type>, m: &Method) {
     let ret_ty = drop_aggregate_types(m.type_.clone());
     if seen_types.get(&ret_ty).is_none() {
         panic!("Method {} references undefined type {}", m.name, m.type_);
@@ -126,15 +128,15 @@ fn validate_method(seen_types : &HashSet<val_type::Type>, m : &Method) {
     }
 }
 
-fn validate_type(seen_types : &HashSet<val_type::Type>, t : &Type) {
+fn validate_type(seen_types: &HashSet<val_type::Type>, t: &Type) {
     for m in &t.methods {
         validate_method(seen_types, m);
     }
 }
 
 /// Perform a validation pass to ensure that all referenced types are present
-fn validate_library(types : &Vec<Type>) {
-    let mut seen_types : HashSet<val_type::Type> = HashSet::new();
+fn validate_library(types: &Vec<Type>) {
+    let mut seen_types: HashSet<val_type::Type> = HashSet::new();
 
     // Seed with primitive types
     seen_types.insert(val_type::Type::PrimInteger);

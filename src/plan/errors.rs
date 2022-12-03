@@ -15,5 +15,5 @@ pub enum PlanError {
     #[error("Invalid aggregate `{0:?}` with arity {1}")]
     InvalidAggregateArity(AggregateOp, usize),
     #[error("Querying {0} is not supported in {1} for this language")]
-    NotSupported(String, String)
+    NotSupported(String, String),
 }

@@ -7,7 +7,7 @@ where
     <Self as Repr>::Type: Eq,
     <Self as Repr>::Type: PartialEq,
     <Self as Repr>::Type: Clone,
-    <Self as Repr>::Type: std::fmt::Debug
+    <Self as Repr>::Type: std::fmt::Debug,
 {
     type Type;
 }
@@ -42,11 +42,11 @@ pub enum Constant {
     Boolean(bool),
     Integer(i32),
     String_(String),
-    Regex(CachedRegex)
+    Regex(CachedRegex),
 }
 
 impl PartialEq for CachedRegex {
-    fn eq(&self, other : &CachedRegex) -> bool {
+    fn eq(&self, other: &CachedRegex) -> bool {
         self.0 == other.0
     }
 }
@@ -70,12 +70,12 @@ pub enum CompOp {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum EqualityOp {
     EQ,
-    NE
+    NE,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AggregateOp {
-    Count
+    Count,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -103,7 +103,7 @@ pub struct Expr<R: Repr> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AsExpr<R: Repr> {
     pub expr: Expr<R>,
-    pub ident: Option<String>
+    pub ident: Option<String>,
 }
 
 /// A top-level select statement
@@ -114,5 +114,5 @@ pub struct Select<R: Repr> {
     /// The where clause, if any
     pub where_formula: Option<Expr<R>>,
     /// A possibly empty list of variable declarations
-    pub var_decls: Vec<VarDecl>
+    pub var_decls: Vec<VarDecl>,
 }

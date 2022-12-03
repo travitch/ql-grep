@@ -1,71 +1,73 @@
 use clap::Parser;
-use crossbeam_channel::{Sender, bounded};
+use crossbeam_channel::{bounded, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
-use tracing::{Level, info, warn};
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::thread;
+use tracing::{info, warn, Level};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-use ql_grep::query::{Query, parse_query};
-use ql_grep::source_file::SourceFile;
-use ql_grep::plan::build_query_plan;
-use ql_grep::query::ir::{Typed, Syntax};
-use ql_grep::query::typecheck::typecheck_query;
-use ql_grep::evaluate::{QueryResult, evaluate_plan};
+use ql_grep::evaluate::{evaluate_plan, QueryResult};
 use ql_grep::library::LIBRARY_DATA;
+use ql_grep::plan::build_query_plan;
+use ql_grep::query::ir::{Syntax, Typed};
+use ql_grep::query::typecheck::typecheck_query;
+use ql_grep::query::{parse_query, Query};
+use ql_grep::source_file::SourceFile;
 
 mod cli;
 
 /// Parse a query provided as either a literal string or a path to a file on
 /// disk
-fn make_query(query_string : &Option<String>, query_path : &Option<PathBuf>) -> anyhow::Result<Query<Syntax>> {
+fn make_query(
+    query_string: &Option<String>,
+    query_path: &Option<PathBuf>,
+) -> anyhow::Result<Query<Syntax>> {
     match query_string {
-        Some(s) => {
-            parse_query(s)
-        },
-        None => {
-            match query_path {
-                Some(p) => {
-                    let s = std::fs::read_to_string(p)?;
-                    parse_query(s)
-                },
-                None => {
-                    panic!("Impossible: one of query_string or query_path is guaranteed by the option parser")
-                }
+        Some(s) => parse_query(s),
+        None => match query_path {
+            Some(p) => {
+                let s = std::fs::read_to_string(p)?;
+                parse_query(s)
             }
-        }
+            None => {
+                panic!("Impossible: one of query_string or query_path is guaranteed by the option parser")
+            }
+        },
     }
 }
 
 struct QueryResults {
-    results : Vec<QueryResult>,
-    source_file : SourceFile
+    results: Vec<QueryResult>,
+    source_file: SourceFile,
 }
 
-fn visit_file(query : &Query<Typed>,
-              send : Sender<QueryResults>,
-              ent : Result<DirEntry, ignore::Error>) -> WalkState {
+fn visit_file(
+    query: &Query<Typed>,
+    send: Sender<QueryResults>,
+    ent: Result<DirEntry, ignore::Error>,
+) -> WalkState {
     match ent {
         Err(err) => {
             info!("While parsing directory entry, `{}`", err);
-        },
+        }
         Ok(dir_ent) => {
             match SourceFile::new(dir_ent.path()) {
                 Err(err) => {
                     info!("While parsing {}, {}", dir_ent.path().display(), err);
-                },
+                }
                 Ok((sf, ast)) => {
                     let mut res_storage = Vec::new();
                     {
                         let mut cursor = tree_sitter::QueryCursor::new();
                         let query_plan = build_query_plan(&sf, &ast, query).unwrap();
-                        let mut result = evaluate_plan(&sf, &ast, &mut cursor, &query_plan).unwrap();
+                        let mut result =
+                            evaluate_plan(&sf, &ast, &mut cursor, &query_plan).unwrap();
                         res_storage.append(&mut result);
                     }
                     // Send the result to the aggregation thread
                     let qr = QueryResults {
                         results: res_storage,
-                        source_file: sf
+                        source_file: sf,
                     };
                     let _ = send.send(qr);
                 }
@@ -76,38 +78,43 @@ fn visit_file(query : &Query<Typed>,
 }
 
 struct Statistics {
-    num_files_parsed : usize,
-    num_matches : usize
+    num_files_parsed: usize,
+    num_matches: usize,
 }
 
 impl Statistics {
     fn new() -> Self {
         Statistics {
             num_files_parsed: 0,
-            num_matches: 0
+            num_matches: 0,
         }
     }
 }
 
 struct FormatOptions {
-    number_lines : bool
+    number_lines: bool,
 }
 
 /// Print this result to the console
-fn print_match(fmt_opts : &FormatOptions, sf : &SourceFile, qr : &QueryResult) {
+fn print_match(fmt_opts: &FormatOptions, sf: &SourceFile, qr: &QueryResult) {
     match qr {
         QueryResult::Constant(v) => {
             println!("{}", sf.file_path.display());
             println!("  {:?}", v);
-        },
+        }
         QueryResult::Node(rng) => {
-            println!("{}:{}-{}", sf.file_path.display(), rng.start_point.row, rng.end_point.row);
+            println!(
+                "{}:{}-{}",
+                sf.file_path.display(),
+                rng.start_point.row,
+                rng.end_point.row
+            );
             let all_bytes = sf.source.as_bytes();
-            let slice = &all_bytes[rng.start_byte .. rng.end_byte];
+            let slice = &all_bytes[rng.start_byte..rng.end_byte];
             match std::str::from_utf8(slice) {
                 Err(_) => {
                     warn!("Error decoding string");
-                },
+                }
                 Ok(s) => {
                     if !fmt_opts.number_lines {
                         println!("{}", s);
@@ -141,11 +148,10 @@ fn main() -> anyhow::Result<()> {
         .with_max_level(Level::WARN)
         .with_env_filter(EnvFilter::from_default_env())
         .finish();
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("setting default subscriber failed");
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     let fmt_opts = FormatOptions {
-        number_lines: args.number_lines
+        number_lines: args.number_lines,
     };
 
     let cwd = std::env::current_dir()?;
@@ -155,7 +161,7 @@ fn main() -> anyhow::Result<()> {
     let typed_select = typecheck_query(query.select)?;
     let typed_query = Query {
         query_ast: query.query_ast,
-        select: typed_select
+        select: typed_select,
     };
 
     let (send, recv) = bounded::<QueryResults>(4096);
@@ -168,7 +174,9 @@ fn main() -> anyhow::Result<()> {
         loop {
             let item = recv.recv();
             match item {
-                Err(_) => { break ; },
+                Err(_) => {
+                    break;
+                }
                 Ok(qr) => {
                     stats.num_files_parsed += 1;
                     stats.num_matches += qr.results.len();
@@ -197,7 +205,7 @@ fn main() -> anyhow::Result<()> {
     match accumulator_handle.join() {
         Err(err) => {
             std::panic::resume_unwind(err);
-        },
+        }
         Ok(result) => {
             println!("Summary:");
             println!("  {} files parsed", result.num_files_parsed);

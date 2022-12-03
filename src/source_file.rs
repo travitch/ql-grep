@@ -1,9 +1,9 @@
-use lazy_static::{lazy_static};
+use anyhow::anyhow;
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::path::{Path,PathBuf};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
-use anyhow::anyhow;
 use tree_sitter;
 
 #[derive(Error, Debug)]
@@ -13,14 +13,14 @@ pub enum SourceError {
     #[error("Unsupported source file type `{0}`")]
     UnsupportedFileType(PathBuf),
     #[error("Failed to parse file `{0}`")]
-    ParseError(PathBuf)
+    ParseError(PathBuf),
 }
 
 #[derive(Debug, Copy, Clone)]
 pub enum Language {
     CPP,
     Java,
-    Python
+    Python,
 }
 
 lazy_static! {
@@ -47,36 +47,47 @@ lazy_static! {
     };
 }
 
-extern "C" { fn tree_sitter_c() -> tree_sitter::Language; }
-extern "C" { fn tree_sitter_cpp() -> tree_sitter::Language; }
-extern "C" { fn tree_sitter_java() -> tree_sitter::Language; }
+extern "C" {
+    fn tree_sitter_c() -> tree_sitter::Language;
+}
+extern "C" {
+    fn tree_sitter_cpp() -> tree_sitter::Language;
+}
+extern "C" {
+    fn tree_sitter_java() -> tree_sitter::Language;
+}
 // extern "C" { fn tree_sitter_python() -> tree_sitter::Language; }
-
 
 pub struct SourceFile {
     /// The original buffer for the source file
-    pub source : String,
+    pub source: String,
     /// The path on disk for the file; used for reporting
-    pub file_path : PathBuf,
+    pub file_path: PathBuf,
     /// A reified data value for the language that we can match on later
-    pub lang : Language,
+    pub lang: Language,
 }
 
 impl SourceFile {
-    pub fn new(path : &Path) -> anyhow::Result<(Self, tree_sitter::Tree)> {
-        let ext = path.extension().ok_or_else(|| anyhow!(SourceError::MissingExtension(path.into())))?;
-        let (ts_lang, language) = LANGUAGES.get(ext).ok_or_else(|| anyhow!(SourceError::UnsupportedFileType(ext.into())))?;
+    pub fn new(path: &Path) -> anyhow::Result<(Self, tree_sitter::Tree)> {
+        let ext = path
+            .extension()
+            .ok_or_else(|| anyhow!(SourceError::MissingExtension(path.into())))?;
+        let (ts_lang, language) = LANGUAGES
+            .get(ext)
+            .ok_or_else(|| anyhow!(SourceError::UnsupportedFileType(ext.into())))?;
         let mut parser = tree_sitter::Parser::new();
         // Unwrap is technically unsafe but it is a programming error if this
         // fails (i.e., we haven't set up the tree-sitter parsers correctly)
         parser.set_language(*ts_lang).unwrap();
 
         let bytes = std::fs::read_to_string(path)?;
-        let t = parser.parse(&bytes, None).ok_or_else(|| anyhow!(SourceError::ParseError(path.into())))?;
+        let t = parser
+            .parse(&bytes, None)
+            .ok_or_else(|| anyhow!(SourceError::ParseError(path.into())))?;
         let sf = SourceFile {
             source: bytes,
             file_path: path.into(),
-            lang: *language
+            lang: *language,
         };
         Ok((sf, t))
     }
