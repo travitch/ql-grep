@@ -26,7 +26,6 @@ struct TestCase {
 
 struct QueryResults {
     results: Vec<QueryResult>,
-    source_file: SourceFile,
 }
 
 struct Statistics {
@@ -62,7 +61,6 @@ fn visit_file(
             // Send the result to the aggregation thread
             let qr = QueryResults {
                 results: res_storage,
-                source_file: sf,
             };
             let _ = send.send(qr);
         }
