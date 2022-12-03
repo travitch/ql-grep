@@ -99,7 +99,7 @@ fn make_tree_interface(file : &SourceFile) -> Rc<dyn TreeInterface> {
     }
 }
 
-fn compile_expr<'a>(ti : Rc<dyn TreeInterface>, e : &'a Expr<Typed>) -> anyhow::Result<NodeFilter> {
+fn compile_expr(ti : Rc<dyn TreeInterface>, e : &Expr<Typed>) -> anyhow::Result<NodeFilter> {
     match &e.expr {
         Expr_::ConstantExpr(v) => {
             match v {
@@ -317,7 +317,7 @@ fn compile_expr<'a>(ti : Rc<dyn TreeInterface>, e : &'a Expr<Typed>) -> anyhow::
                             let arg_count_matcher = NodeMatcher {
                                 extract: Rc::new(move |ctx, source| (arg_matcher.extract)(ctx, source).len() as i32)
                             };
-                            return Ok(NodeFilter::NumericComputation(arg_count_matcher));
+                            Ok(NodeFilter::NumericComputation(arg_count_matcher))
                         },
                         _ => {
                             panic!("Invalid argument to count (expected a list computation)");
@@ -352,7 +352,7 @@ fn compile_expr<'a>(ti : Rc<dyn TreeInterface>, e : &'a Expr<Typed>) -> anyhow::
                         f(Rc::clone(&ti1), &elt, &ops1)
                     })).map_or_else(|| {
                         f(Rc::clone(&ti), &base_comp, &ops2)
-                    }, |t| Ok(t))
+                    }, Ok)
                 },
                 None => {
                     panic!("No handler implemented for method `{}` of type `{}`", method, base.type_);
@@ -447,7 +447,7 @@ where
 ///
 /// This function returns None if the given `relation` is not a list.
 /// Otherwise, it always returns a NodeFilter.
-fn transform_node_filter<'a, F>(result_type : Type, relation : &NodeFilter, transformer : Rc<F>) -> Option<NodeFilter>
+fn transform_node_filter<F>(result_type : Type, relation : &NodeFilter, transformer : Rc<F>) -> Option<NodeFilter>
 where
     F: Fn(Rc<NodeFilter>) -> anyhow::Result<NodeFilter> + 'static
 {
@@ -456,11 +456,11 @@ where
         NodeFilter::ArgumentListComputation(arg_list_matcher) => {
             match result_type.base_if_relational() {
                 Type::PrimString => {
-                    let matcher = transform_body(arg_list_matcher, Box::new(|nm| NodeFilter::ArgumentComputation(nm)), as_string, xfrm);
+                    let matcher = transform_body(arg_list_matcher, NodeFilter::ArgumentComputation, as_string, xfrm);
                     Some(NodeFilter::StringListComputation(matcher))
                 },
                 Type::Type => {
-                    let matcher = transform_body(arg_list_matcher, Box::new(|nm| NodeFilter::ArgumentComputation(nm)), as_type, xfrm);
+                    let matcher = transform_body(arg_list_matcher, NodeFilter::ArgumentComputation, as_type, xfrm);
                     Some(NodeFilter::TypeListComputation(matcher))
                 },
                 _ => panic!("Unsupported conversion from Argument (only String is supported), result type `{}`", result_type)
@@ -469,7 +469,7 @@ where
         NodeFilter::StringListComputation(string_list_matcher) => {
             match result_type.base_if_relational() {
                 Type::PrimBoolean => {
-                    let matcher = transform_body(string_list_matcher, Box::new(|nm| NodeFilter::StringComputation(nm)), as_predicate, xfrm);
+                    let matcher = transform_body(string_list_matcher, NodeFilter::StringComputation, as_predicate, xfrm);
                     Some(NodeFilter::PredicateListComputation(matcher))
                 },
                 _ => {
@@ -480,7 +480,7 @@ where
         NodeFilter::TypeListComputation(type_list_matcher) => {
             match result_type.base_if_relational() {
                 Type::PrimString => {
-                    let matcher = transform_body(type_list_matcher, Box::new(|nm| NodeFilter::TypeComputation(nm)), as_string, xfrm);
+                    let matcher = transform_body(type_list_matcher, NodeFilter::TypeComputation, as_string, xfrm);
                     Some(NodeFilter::StringListComputation(matcher))
                 },
                 _ => {
