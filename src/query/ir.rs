@@ -112,7 +112,7 @@ pub struct Select<R: Repr> {
     /// The expression to evaluate and return
     pub select_exprs: Vec<AsExpr<R>>,
     /// The where clause, if any
-    pub where_formula: Option<Expr<R>>,
+    pub where_formula: Expr<R>,
     /// A possibly empty list of variable declarations
     pub var_decls: Vec<VarDecl>,
 }

@@ -429,14 +429,7 @@ pub fn typecheck_query(syntax: Select<Syntax>) -> anyhow::Result<Select<Typed>> 
         typed_selected_exprs.push(typed_sel);
     }
 
-    let mut typed_where = None;
-    match syntax.where_formula {
-        None => {}
-        Some(f) => {
-            let typed_f = typecheck_expr(&mut type_env, &f)?;
-            typed_where = Some(typed_f);
-        }
-    }
+    let typed_where = typecheck_expr(&mut type_env, &syntax.where_formula)?;
 
     let typed_select = Select {
         select_exprs: typed_selected_exprs,

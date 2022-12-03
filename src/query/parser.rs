@@ -362,7 +362,11 @@ pub fn parse_query_ast(
 
     let mut selected_exprs = Vec::new();
     let mut declared_vars = Vec::new();
-    let mut filter = None;
+    // The default filter accepts all selected values
+    let mut filter = Expr {
+        expr: Expr_::ConstantExpr(Constant::Boolean(true)),
+        type_: Untyped,
+    };
 
     let mut cursor = sel.walk();
     for child in sel.named_children(&mut cursor) {
@@ -380,19 +384,19 @@ pub fn parse_query_ast(
             // decls/select, but just have everything else be a where clause
             "comp_term" => {
                 let e = parse_expr(child, source.as_ref())?;
-                filter = Some(e);
+                filter = e;
             }
             "qualified_expr" => {
                 let e = parse_expr(child, source.as_ref())?;
-                filter = Some(e);
+                filter = e;
             }
             "conjunction" => {
                 let e = parse_expr(child, source.as_ref())?;
-                filter = Some(e);
+                filter = e;
             }
             "disjunction" => {
                 let e = parse_expr(child, source.as_ref())?;
-                filter = Some(e);
+                filter = e;
             }
             _ => {
                 return Err(anyhow::anyhow!(QueryError::InvalidSelect(sel.range(), 0)));

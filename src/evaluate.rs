@@ -95,21 +95,16 @@ pub fn evaluate_plan<'a>(
         QueryAction::TSQuery(flt, q, root_var) => {
             for qm in cursor.matches(q, ast.root_node(), target.source.as_bytes()) {
                 let accept_node = {
-                    match &flt {
-                        None => true,
-                        Some(f) => {
-                            eval_ctx.bind_node(root_var, qm.captures[0].node);
-                            let res = evaluate_filter(target, &mut eval_ctx, f)?;
-                            match res {
-                                Value::Constant(Constant::Boolean(b)) => b,
-                                Value::Constant(_) => {
-                                    // This is a panic because the query planner
-                                    // should have raised a more structured
-                                    // error already. If we get here, this is a
-                                    // coding error.
-                                    panic!("Invalid filter return type");
-                                }
-                            }
+                    eval_ctx.bind_node(root_var, qm.captures[0].node);
+                    let res = evaluate_filter(target, &mut eval_ctx, &flt)?;
+                    match res {
+                        Value::Constant(Constant::Boolean(b)) => b,
+                        Value::Constant(_) => {
+                            // This is a panic because the query planner
+                            // should have raised a more structured
+                            // error already. If we get here, this is a
+                            // coding error.
+                            panic!("Invalid filter return type");
                         }
                     }
                 };

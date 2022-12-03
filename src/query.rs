@@ -52,7 +52,7 @@ fn var_ref(name: &str) -> Expr<Syntax> {
 }
 
 #[allow(dead_code)]
-fn untyped(e: Expr_<Syntax>) -> Expr<Syntax> {
+const fn untyped(e: Expr_<Syntax>) -> Expr<Syntax> {
     Expr {
         expr: e,
         type_: Untyped,
@@ -74,6 +74,9 @@ fn declare(vars: &[(Type, &str)]) -> Vec<VarDecl> {
     res
 }
 
+#[allow(dead_code)]
+const const_true: Expr<Syntax> = untyped(Expr_::ConstantExpr(Constant::Boolean(true)));
+
 #[test]
 fn select_one_constant() {
     let ql = "select 5";
@@ -86,7 +89,7 @@ fn select_one_constant() {
     exprs.push(as_expr);
     let expected = Select {
         select_exprs: exprs,
-        where_formula: None,
+        where_formula: const_true,
         var_decls: Vec::new(),
     };
     assert_eq!(expected, r.unwrap().select);
@@ -104,7 +107,7 @@ fn select_named_constant() {
     exprs.push(as_expr);
     let expected = Select {
         select_exprs: exprs,
-        where_formula: None,
+        where_formula: const_true,
         var_decls: Vec::new(),
     };
     assert_eq!(expected, r.unwrap().select);
@@ -127,7 +130,7 @@ fn select_two_constants() {
     exprs.push(as_expr2);
     let expected = Select {
         select_exprs: exprs,
-        where_formula: None,
+        where_formula: const_true,
         var_decls: Vec::new(),
     };
     assert_eq!(expected, r.unwrap().select);
@@ -146,7 +149,7 @@ fn select_with_decls() {
 
     let expected = Select {
         select_exprs: exprs,
-        where_formula: None,
+        where_formula: const_true,
         var_decls: declare(&[(Type::Function, "x"), (Type::Method, "m")]),
     };
 
@@ -179,7 +182,7 @@ fn string_literal() {
 
     let expected = Select {
         select_exprs: exprs,
-        where_formula: Some(cmp),
+        where_formula: cmp,
         var_decls: declare(&[(Type::Method, "m")]),
     };
 
@@ -210,7 +213,7 @@ fn predicate_argument() {
 
     let expected = Select {
         select_exprs: exprs,
-        where_formula: Some(rx_match),
+        where_formula: rx_match,
         var_decls: declare(&[(Type::Method, "m")]),
     };
 
@@ -252,7 +255,7 @@ fn select_filter_parameter_count() {
 
     let expected = Select {
         select_exprs: exprs,
-        where_formula: Some(cmp),
+        where_formula: cmp,
         var_decls: declare(&[(Type::Method, "m")]),
     };
 

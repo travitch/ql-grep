@@ -33,7 +33,7 @@ pub enum QueryAction {
     /// The string is the root variable bound by the query
     ///
     /// This may need to be generalized in more complex cases (or that might just trigger datalog mode)
-    TSQuery(Option<NodeFilter>, tree_sitter::Query, BoundNode),
+    TSQuery(NodeFilter, tree_sitter::Query, BoundNode),
     /// A trivial result that is a constant
     ConstantValue(Constant),
 }
@@ -427,13 +427,7 @@ pub fn compile_query<'a>(
                 .top_level_type(ty)
                 .ok_or_else(|| anyhow::anyhow!(unsupported))?;
             let ts_query = tree_sitter::Query::new(ast.language(), &top_level.query)?;
-            let flt = match &query.select.where_formula {
-                None => anyhow::Ok(None),
-                Some(w) => {
-                    let flt = compile_expr(tree_interface, w)?;
-                    anyhow::Ok(Some(flt))
-                }
-            }?;
+            let flt = compile_expr(tree_interface, &query.select.where_formula)?;
             let bound_node = BoundNode::new(var, ty);
             let p = CompiledQuery {
                 steps: QueryAction::TSQuery(flt, ts_query, bound_node),
