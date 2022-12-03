@@ -1,7 +1,7 @@
 use tree_sitter;
 
 use crate::compile::interface::EvaluationContext;
-use crate::compile::{NodeFilter, QueryAction, CompiledQuery};
+use crate::compile::{CompiledQuery, NodeFilter, QueryAction};
 use crate::query::ir::Constant;
 use crate::source_file;
 

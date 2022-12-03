@@ -6,13 +6,10 @@ use std::thread;
 use tracing::{info, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-use ql_grep::evaluate::{evaluate_plan, QueryResult};
-use ql_grep::library::LIBRARY_DATA;
-use ql_grep::compile::compile_query;
-use ql_grep::query::ir::{Syntax, Typed};
-use ql_grep::query::typecheck::typecheck_query;
-use ql_grep::query::{parse_query, Query};
-use ql_grep::source_file::SourceFile;
+use ql_grep::{
+    compile_query, evaluate_plan, parse_query, typecheck_query, Query, QueryResult, SourceFile,
+    Syntax, Typed, LIBRARY_DATA,
+};
 
 mod cli;
 

@@ -1,8 +1,7 @@
 #![cfg(test)]
 use test_generator::test_resources;
 
-use ql_grep::query::parse_query;
-use ql_grep::query::typecheck::typecheck_query;
+use ql_grep::{parse_query, typecheck_query};
 
 /// For each test file, parse it and then typecheck the AST
 ///
