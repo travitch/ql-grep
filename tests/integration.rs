@@ -7,7 +7,7 @@ use test_generator::test_resources;
 use toml::de;
 
 use ql_grep::evaluate::{evaluate_plan, QueryResult};
-use ql_grep::plan::build_query_plan;
+use ql_grep::compile::compile_query;
 use ql_grep::query::ir::Typed;
 use ql_grep::query::typecheck::typecheck_query;
 use ql_grep::query::{parse_query, Query};
@@ -55,7 +55,7 @@ fn visit_file(
             let mut res_storage = Vec::new();
             {
                 let mut cursor = tree_sitter::QueryCursor::new();
-                let query_plan = build_query_plan(&sf, &ast, query).unwrap();
+                let query_plan = compile_query(&sf, &ast, query).unwrap();
                 let mut result = evaluate_plan(&sf, &ast, &mut cursor, &query_plan).unwrap();
                 res_storage.append(&mut result);
             }
