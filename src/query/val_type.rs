@@ -93,7 +93,7 @@ impl FromStr for Type {
         type_parser()
             .easy_parse(combine::stream::position::Stream::new(s))
             .map(|res| res.0)
-            .or_else(|_| Err(TypeParseError::TypeParseError))
+            .map_err(|_| TypeParseError::TypeParseError)
     }
 }
 

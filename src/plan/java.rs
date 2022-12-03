@@ -87,6 +87,6 @@ fn parameter_node_to_argument<'a>(n : &'a Node, src : &'a [u8]) -> FormalArgumen
 
     FormalArgument {
         name: Some(ident.into()),
-        declared_type: Some(ty.into())
+        declared_type: Some(ty)
     }
 }

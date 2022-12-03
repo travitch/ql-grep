@@ -58,11 +58,8 @@ fn evaluates_to_boolean(ty : &Type) -> bool {
 /// a relational type (otherwise just return the scalar return type)
 fn promote_return(scalar_ret_ty : &Type, input_types : &Vec<&Type>) -> Type {
     for inp in input_types {
-        match inp {
-            Type::Relational(_) => {
-                return Type::Relational(Box::new(scalar_ret_ty.clone()))
-            },
-            _ => {}
+        if let Type::Relational(_) = inp {
+            return Type::Relational(Box::new(scalar_ret_ty.clone()))
         }
     }
 

@@ -88,9 +88,9 @@ fn parse_type_node<'a>(decl : &Option<Declarator>, n : &'a Node, src : &'a [u8])
 
     s.push_str(n.utf8_text(src).unwrap());
 
-    decl.as_ref().map(|d| {
+    if let Some(d) = decl.as_ref() {
         d.append_declarators(&mut s);
-    });
+    };
 
     LanguageType::new(&s)
 }

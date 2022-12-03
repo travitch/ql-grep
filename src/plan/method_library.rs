@@ -30,7 +30,7 @@ fn callable_get_name<'a>(ti : Rc<dyn TreeInterface>, base : &'a NodeFilter, oper
     // the current language (which we don't know).
     match base {
         NodeFilter::CallableComputation(callable_matcher) => {
-            let name_matcher = ti.callable_name(&callable_matcher)
+            let name_matcher = ti.callable_name(callable_matcher)
                 .ok_or_else(|| PlanError::NotSupported("getNames".into(), "callable".into()))?;
             Ok(NodeFilter::StringComputation(name_matcher))
         },
@@ -45,7 +45,7 @@ fn callable_get_a_parameter<'a>(ti : Rc<dyn TreeInterface>, base : &'a NodeFilte
     assert!(operands.is_empty());
     match base {
         NodeFilter::CallableComputation(callable_matcher) => {
-            let arg_matcher = ti.callable_arguments(&callable_matcher)
+            let arg_matcher = ti.callable_arguments(callable_matcher)
                 .ok_or_else(|| PlanError::NotSupported("arguments".into(), "callable".into()))?;
             Ok(NodeFilter::ArgumentListComputation(arg_matcher))
         },
@@ -87,7 +87,7 @@ fn parameter_get_name<'a>(_ti : Rc<dyn TreeInterface>, base : &'a NodeFilter, op
             let x = Rc::clone(&c.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
-                    x(ctx, source).name.unwrap_or("<none>".into())
+                    x(ctx, source).name.unwrap_or_else(|| "<none>".into())
                 })
             };
             Ok(NodeFilter::StringComputation(comp))
