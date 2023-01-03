@@ -29,9 +29,9 @@ enum Value {
 /// This is currently set up as a very naive interpreter. In the future, the
 /// query planner could embed some of the numeric and logical computations into
 /// the individual filters to reduce the evaluation cost.
-fn evaluate_filter(
-    target: &source_file::SourceFile,
-    ctx: &mut EvaluationContext,
+fn evaluate_filter<'a, 'b : 'a>(
+    target: &'b source_file::SourceFile,
+    ctx: &'a mut EvaluationContext<'b>,
     flt: &NodeFilter,
 ) -> anyhow::Result<Value> {
     match flt {

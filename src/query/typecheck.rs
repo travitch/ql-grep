@@ -389,7 +389,10 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
                 ),
                 type_: promoted_ret_ty,
             })
-        }
+        },
+        Expr_::Bind(_, _, _) => {
+            panic!("Bind expressions should not exist during type checking");
+        },
     }
 }
 

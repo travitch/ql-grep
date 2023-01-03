@@ -10,6 +10,8 @@ use tree_sitter;
 use crate::query::error::QueryError;
 use crate::query::ir::*;
 use crate::query::parser::parse_query_ast;
+
+#[cfg(test)]
 use crate::query::val_type::Type;
 
 /// An abstract representation of queries
@@ -46,12 +48,12 @@ pub fn parse_query(text: impl AsRef<[u8]>) -> anyhow::Result<Query<Syntax>> {
 // These two helpers are used in the tests and look like dead code when not
 // building test cases.
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn var_ref(name: &str) -> Expr<Syntax> {
     untyped(Expr_::VarRef(name.into()))
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 const fn untyped(e: Expr_<Syntax>) -> Expr<Syntax> {
     Expr {
         expr: e,
@@ -59,7 +61,7 @@ const fn untyped(e: Expr_<Syntax>) -> Expr<Syntax> {
     }
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn declare(vars: &[(Type, &str)]) -> Vec<VarDecl> {
     let mut res = Vec::new();
 
@@ -74,8 +76,8 @@ fn declare(vars: &[(Type, &str)]) -> Vec<VarDecl> {
     res
 }
 
-#[allow(dead_code)]
-const const_true: Expr<Syntax> = untyped(Expr_::ConstantExpr(Constant::Boolean(true)));
+#[cfg(test)]
+const CONST_TRUE: Expr<Syntax> = untyped(Expr_::ConstantExpr(Constant::Boolean(true)));
 
 #[test]
 fn select_one_constant() {
@@ -89,7 +91,7 @@ fn select_one_constant() {
     exprs.push(as_expr);
     let expected = Select {
         select_exprs: exprs,
-        where_formula: const_true,
+        where_formula: CONST_TRUE,
         var_decls: Vec::new(),
     };
     assert_eq!(expected, r.unwrap().select);
@@ -107,7 +109,7 @@ fn select_named_constant() {
     exprs.push(as_expr);
     let expected = Select {
         select_exprs: exprs,
-        where_formula: const_true,
+        where_formula: CONST_TRUE,
         var_decls: Vec::new(),
     };
     assert_eq!(expected, r.unwrap().select);
@@ -130,7 +132,7 @@ fn select_two_constants() {
     exprs.push(as_expr2);
     let expected = Select {
         select_exprs: exprs,
-        where_formula: const_true,
+        where_formula: CONST_TRUE,
         var_decls: Vec::new(),
     };
     assert_eq!(expected, r.unwrap().select);
@@ -149,7 +151,7 @@ fn select_with_decls() {
 
     let expected = Select {
         select_exprs: exprs,
-        where_formula: const_true,
+        where_formula: CONST_TRUE,
         var_decls: declare(&[(Type::Function, "x"), (Type::Method, "m")]),
     };
 

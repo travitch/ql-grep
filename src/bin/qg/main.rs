@@ -7,7 +7,7 @@ use tracing::{info, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use ql_grep::{
-    compile_query, evaluate_plan, parse_query, typecheck_query, Query, QueryResult, SourceFile,
+    plan_query, compile_query, evaluate_plan, parse_query, typecheck_query, Query, QueryResult, SourceFile,
     Syntax, Typed, LIBRARY_DATA,
 };
 
@@ -56,9 +56,9 @@ fn visit_file(
                     let mut res_storage = Vec::new();
                     {
                         let mut cursor = tree_sitter::QueryCursor::new();
-                        let query_plan = compile_query(&sf, &ast, query).unwrap();
-                        let mut result =
-                            evaluate_plan(&sf, &ast, &mut cursor, &query_plan).unwrap();
+                        let query_plan = plan_query(query).unwrap();
+                        let compiled_query = compile_query(&sf, &ast, &query_plan).unwrap();
+                        let mut result = evaluate_plan(&sf, &ast, &mut cursor, &compiled_query).unwrap();
                         res_storage.append(&mut result);
                     }
                     // Send the result to the aggregation thread

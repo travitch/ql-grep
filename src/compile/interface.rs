@@ -34,6 +34,15 @@ impl CallableRef {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ParameterRef(String);
+
+impl ParameterRef {
+    pub fn new(var_name: &str) -> Self {
+        ParameterRef(var_name.into())
+    }
+}
+
 /// References to variables that can be bound to an initial tree sitter node
 ///
 /// This is used to communicate the variable(s) that need to be initialized in
@@ -65,12 +74,14 @@ pub struct EvaluationContext<'a> {
     /// All of the nodes corresponding to the Callable currently under
     /// evaluation
     callables: HashMap<CallableRef, Node<'a>>,
+    parameters: HashMap<ParameterRef, FormalArgument>,
 }
 
 impl<'a> EvaluationContext<'a> {
     pub fn new() -> Self {
         EvaluationContext {
             callables: HashMap::new(),
+            parameters: HashMap::new(),
         }
     }
 
@@ -82,12 +93,20 @@ impl<'a> EvaluationContext<'a> {
         self.callables.get(cr).unwrap()
     }
 
-    pub fn bind_node(&mut self, binder: &BoundNode, n: Node<'a>) {
+    pub fn bind_node<'b>(&'b mut self, binder: &BoundNode, n: Node<'a>) {
         match binder {
             BoundNode::Callable(CallableRef(name)) => {
                 self.callables.insert(CallableRef(name.into()), n);
             }
         }
+    }
+
+    pub fn lookup_parameter(&self, pr: &ParameterRef) -> &FormalArgument {
+        self.parameters.get(pr).unwrap()
+    }
+
+    pub fn bind_parameter(&mut self, pr: &ParameterRef, param: &FormalArgument) {
+        self.parameters.insert(pr.clone(), param.clone());
     }
 
     /// Drop any bindings that are in the map
@@ -96,6 +115,7 @@ impl<'a> EvaluationContext<'a> {
     /// need to carry any data between nodes.
     pub fn flush_bindings(&mut self) {
         self.callables.clear();
+        self.parameters.clear();
     }
 }
 
@@ -108,7 +128,7 @@ impl<'a> EvaluationContext<'a> {
 /// FIXME: Add another field that records ranges to highlight in results (i.e.,
 /// the code that contributes to a Node being included)
 pub struct NodeMatcher<R> {
-    pub extract: Rc<dyn for<'a> Fn(&'a EvaluationContext<'a>, &'a [u8]) -> R>,
+    pub extract: Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> R>,
 }
 
 /// A representation of language-level types (e.g., Java or C types)

@@ -11,12 +11,12 @@ use std::rc::Rc;
 use crate::compile::backend::cpp::CPPTreeInterface;
 use crate::compile::backend::java::JavaTreeInterface;
 use crate::compile::errors::PlanError;
-use crate::compile::interface::{BoundNode, CallableRef, NodeMatcher, TreeInterface};
+use crate::compile::interface::{BoundNode, CallableRef, NodeMatcher, TreeInterface, ParameterRef};
 use crate::compile::lift::transform_node_filter;
 use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
-use crate::query;
-use crate::query::ir::{AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Repr, Typed};
+use crate::plan::QueryPlan;
+use crate::query::ir::{AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Repr, Typed, VarDecl};
 use crate::query::val_type::Type;
 use crate::source_file::{Language, SourceFile};
 
@@ -48,10 +48,10 @@ struct Context {
 }
 
 impl Context {
-    fn new(query: &query::Query<Typed>) -> Self {
+    fn new(var_decls: &Vec<VarDecl>) -> Self {
         let mut t = HashMap::new();
 
-        for var_decl in query.select.var_decls.iter() {
+        for var_decl in var_decls.iter() {
             t.insert(var_decl.name.clone(), var_decl.type_.clone());
         }
 
@@ -109,7 +109,17 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                         extract: Rc::new(move |_, _| CallableRef::new(this_s.as_ref())),
                     };
                     Ok(NodeFilter::CallableComputation(m))
-                }
+                },
+                Type::Parameter => {
+                    let this_s = s.clone();
+                    let m = NodeMatcher {
+                        extract: Rc::new(move |ctx, _| {
+                            let param_ref = ParameterRef::new(this_s.as_ref());
+                            ctx.lookup_parameter(&param_ref).clone()
+                        }),
+                    };
+                    Ok(NodeFilter::ArgumentComputation(m))
+                },
                 ty => {
                     panic!(
                         "References to variables of type `{}` are not yet supported",
@@ -163,7 +173,53 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                     panic!("Impossible: relational comparison applied to unsupported type");
                 }
             }
-        }
+        },
+        Expr_::Bind(var_decl, relation_expr, eval_expr) => {
+            // Wrap the computation to be evaluated in a wrapper of the
+            // appropriate type that binds `var_decl` for each possible value.
+            // If there are no bindings, return False.  The expression under the
+            // binding *should* always be boolean.
+            //
+            // Critically, if there are no matches, the binder must evaluate to
+            // false to reflect that there were no values to relationally bind.
+            let compiled_eval_expr = compile_expr(Rc::clone(&ti), &eval_expr)?;
+            let eval_func = match compiled_eval_expr {
+                NodeFilter::Predicate(nm) => {
+                    nm
+                },
+                nf => {
+                    panic!("Invalid non-predicate node filter as expression evaluated under a binder: {}", nf.kind());
+                }
+            };
+
+            let compiled_binder = compile_expr(Rc::clone(&ti), &relation_expr)?;
+            match compiled_binder {
+                NodeFilter::ArgumentListComputation(param_comp) => {
+                    let param_ref = ParameterRef::new(&var_decl.name);
+                    let m = NodeMatcher {
+                        extract: Rc::new(move |ctx, source| {
+                            let param_ref_inner = param_ref.clone();
+                            let mut result = false;
+                            let params = (param_comp.extract)(ctx, source);
+                            for param in params {
+                                ctx.bind_parameter(&param_ref_inner, &param);
+                                // NOTE: This short circuits evaluation once any
+                                // match is found. That is only desirable if the
+                                // enclosing construct (e.g., a function) is the
+                                // thing being selected.
+                                result = result || (eval_func.extract)(ctx, source);
+                            }
+                            return result;
+                        }),
+                    };
+
+                    Ok(NodeFilter::Predicate(m))
+                },
+                _ => {
+                    panic!("Unexpected binder type: {}", compiled_binder.kind());
+                }
+            }
+        },
         Expr_::EqualityComparison(lhs, op, rhs) => {
             let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
             let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
@@ -383,7 +439,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
 pub fn compile_query<'a>(
     source: &'a SourceFile,
     ast: &'a tree_sitter::Tree,
-    query: &'a query::Query<Typed>,
+    query_plan: &'a QueryPlan,
 ) -> anyhow::Result<CompiledQuery> {
     // The basic idea is that we want to do as much processing as we can inside
     // of Tree Sitter's query language, as it will be the most efficient.
@@ -402,15 +458,15 @@ pub fn compile_query<'a>(
     // compositionally: instead of requiring us to make a monolithic query that
     // does everything at once, we can select e.g., functions and then perform
     // subsequent refined queries on the returned nodes.
-    let num_selected = query.select.select_exprs.len();
+    let num_selected = query_plan.selected_exprs.len();
     if num_selected != 1 {
         return Err(anyhow::anyhow!(PlanError::NonSingletonSelect(num_selected)));
     }
 
     let tree_interface: Rc<dyn TreeInterface> = make_tree_interface(source);
-    let ctx = Context::new(query);
+    let ctx = Context::new(&query_plan.var_decls);
 
-    match &query.select.select_exprs[0].expr.expr {
+    match &query_plan.selected_exprs[0].expr.expr {
         Expr_::ConstantExpr(v) => {
             let p = CompiledQuery {
                 steps: QueryAction::ConstantValue(v.clone()),
@@ -427,7 +483,7 @@ pub fn compile_query<'a>(
                 .top_level_type(ty)
                 .ok_or_else(|| anyhow::anyhow!(unsupported))?;
             let ts_query = tree_sitter::Query::new(ast.language(), &top_level.query)?;
-            let flt = compile_expr(tree_interface, &query.select.where_formula)?;
+            let flt = compile_expr(tree_interface, &query_plan.where_formula)?;
             let bound_node = BoundNode::new(var, ty);
             let p = CompiledQuery {
                 steps: QueryAction::TSQuery(flt, ts_query, bound_node),
