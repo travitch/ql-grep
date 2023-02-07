@@ -3,7 +3,7 @@ use crossbeam_channel::{bounded, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 use std::path::PathBuf;
 use std::thread;
-use tracing::{info, warn, Level};
+use tracing::{info, warn, error, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use ql_grep::{
@@ -38,6 +38,14 @@ struct QueryResults {
     source_file: SourceFile,
 }
 
+fn process_query(query: &Query<Typed>, sf: &SourceFile, ast: &tree_sitter::Tree) -> anyhow::Result<Vec<QueryResult>> {
+    let mut cursor = tree_sitter::QueryCursor::new();
+    let query_plan = plan_query(query)?;
+    let compiled_query = compile_query(sf, ast, &query_plan)?;
+    let result = evaluate_plan(sf, ast, &mut cursor, &compiled_query)?;
+    Ok(result)
+}
+
 fn visit_file(
     query: &Query<Typed>,
     send: Sender<QueryResults>,
@@ -54,13 +62,15 @@ fn visit_file(
                 }
                 Ok((sf, ast)) => {
                     let mut res_storage = Vec::new();
-                    {
-                        let mut cursor = tree_sitter::QueryCursor::new();
-                        let query_plan = plan_query(query).unwrap();
-                        let compiled_query = compile_query(&sf, &ast, &query_plan).unwrap();
-                        let mut result = evaluate_plan(&sf, &ast, &mut cursor, &compiled_query).unwrap();
-                        res_storage.append(&mut result);
+                    match process_query(query, &sf, &ast) {
+                        Err(e) => {
+                            error!("Error while parsing `{}`: {}", dir_ent.path().display(), e);
+                        },
+                        Ok(mut result) => {
+                            res_storage.append(&mut result);
+                        }
                     }
+
                     // Send the result to the aggregation thread
                     let qr = QueryResults {
                         results: res_storage,
