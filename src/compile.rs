@@ -444,7 +444,7 @@ pub fn compile_query<'a>(
     // We will then perform a layer of refined processing to the extent
     // necessary (e.g., applying regex matches to identifier names).
     //
-    // Finally, we will do more advanced program analysis using catalog. The
+    // Finally, we will do more advanced program analysis using datalog. The
     // previous two steps will submit tuples to a Datalog database. The
     // top-level query plan will saturate the tuple store and read out results.
 
