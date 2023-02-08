@@ -189,21 +189,18 @@ fn validate_library(impls: &HashMap<(Type, String), Handler>) {
     for (base_type, method_name) in impls.keys() {
         match lib_idx.get(base_type) {
             None => {
-                panic!("Missing library definition for type `{:?}`", base_type);
+                panic!("Missing library definition for type `{base_type:?}`");
             }
             Some(ty_index) => {
                 let sigs = &ty_index.method_index;
                 match sigs.get(method_name) {
                     Some(MethodSignature(_name, _arg_types, _ret_type, status)) => {
                         if *status == Some(Status::Unimplemented) {
-                            panic!("Method `{}` for type `{:?}` is marked as unimplemented, but has an implementation defined", method_name, base_type);
+                            panic!("Method `{method_name}` for type `{base_type:?}` is marked as unimplemented, but has an implementation defined");
                         }
                     }
                     None => {
-                        panic!(
-                            "Missing library definition for method `{}` of type `{:?}`",
-                            method_name, base_type
-                        );
+                        panic!("Missing library definition for method `{method_name}` of type `{base_type:?}`");
                     }
                 }
             }
@@ -222,7 +219,7 @@ fn validate_library(impls: &HashMap<(Type, String), Handler>) {
 
             match impls.get(&(ty.clone(), method_name.into())) {
                 None => {
-                    panic!("Method `{}` for type `{:?}` is claimed to be implemented in the library, but has no implementation at runtime", method_name, ty);
+                    panic!("Method `{method_name}` for type `{ty:?}` is claimed to be implemented in the library, but has no implementation at runtime");
                 }
                 Some(_) => {}
             }

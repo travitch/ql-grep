@@ -4,7 +4,6 @@
 /// which is both documentation and the source of truth for the type checker.
 pub mod index;
 
-use knuffel;
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::error::Error;

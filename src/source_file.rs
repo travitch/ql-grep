@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use tree_sitter;
 
 #[derive(Error, Debug)]
 pub enum SourceError {

@@ -42,7 +42,7 @@ impl TreeInterface for JavaTreeInterface {
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(formal_parameter) @parameter";
                 let query = tree_sitter::Query::new(node.language(), ql_query)
-                    .unwrap_or_else(|e| panic!("Error while querying arguments {:?}", e));
+                    .unwrap_or_else(|e| panic!("Error while querying arguments {e:?}"));
                 let qms = cur.matches(&query, *node, source);
                 qms.map(|m| parameter_node_to_argument(&m.captures[0].node, source))
                     .collect()
@@ -60,7 +60,7 @@ impl TreeInterface for JavaTreeInterface {
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(method_declaration (identifier) @method.name)";
                 let query = tree_sitter::Query::new(node.language(), ql_query)
-                    .unwrap_or_else(|e| panic!("Error while querying name {:?}", e));
+                    .unwrap_or_else(|e| panic!("Error while querying name {e:?}"));
                 let mut qms = cur.matches(&query, *node, source);
                 let m = qms.next().unwrap();
                 callable_name_node_to_string(&m.captures[0].node, source)

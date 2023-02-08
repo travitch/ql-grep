@@ -41,7 +41,7 @@ impl TreeInterface for CPPTreeInterface {
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(parameter_declaration) @parameter";
                 let query = tree_sitter::Query::new(node.language(), ql_query)
-                    .unwrap_or_else(|e| panic!("Error while querying arguments {:?}", e));
+                    .unwrap_or_else(|e| panic!("Error while querying arguments {e:?}"));
                 let qms = cur.matches(&query, *node, source);
                 qms.map(|m| parameter_node_to_argument(&m.captures[0].node, source))
                     .collect()
@@ -59,7 +59,7 @@ impl TreeInterface for CPPTreeInterface {
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(function_declarator (identifier) @function.name)";
                 let query = tree_sitter::Query::new(node.language(), ql_query)
-                    .unwrap_or_else(|e| panic!("Error while querying name {:?}", e));
+                    .unwrap_or_else(|e| panic!("Error while querying name {e:?}"));
                 let mut qms = cur.matches(&query, *node, source);
                 let m = qms.next().unwrap();
                 callable_name_node_to_string(&m.captures[0].node, source)
@@ -178,7 +178,7 @@ fn parse_declarator<'a>(n: &'a Node, src: &'a [u8]) -> Declarator {
             Declarator::Unnamed
         }
         k => {
-            panic!("Unsupported C/C++ declarator type `{}`", k);
+            panic!("Unsupported C/C++ declarator type `{k}`");
         }
     }
 }

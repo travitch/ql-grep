@@ -8,16 +8,16 @@
 use std::collections::HashSet;
 
 use crate::library::index::library_index;
-use crate::query::{Query};
 use crate::query::ir::{AsExpr, EqualityOp, Expr, Expr_, Typed, VarDecl};
 use crate::query::val_type::Type;
+use crate::query::Query;
 
+#[cfg(test)]
+use crate::query::ir::Constant;
 #[cfg(test)]
 use crate::query::parse_query;
 #[cfg(test)]
 use crate::query::typecheck::typecheck_query;
-#[cfg(test)]
-use crate::query::ir::Constant;
 
 /// This wraps up the contents of the original query in a more structured form
 pub struct QueryPlan {
@@ -29,19 +29,21 @@ pub struct QueryPlan {
 
 #[derive(thiserror::Error, Debug)]
 pub enum PlanError {
-    #[error("At least one variable is not related to the others by a containment relationship: {0:?}")]
+    #[error(
+        "At least one variable is not related to the others by a containment relationship: {0:?}"
+    )]
     UnrelatedVariablesError(Vec<VarDecl>),
 }
 
 /// Remove any types "reachable" (via the containment relationship) from `ty`
-fn remove_reachable_from(all_var_types : &mut HashSet<Type>, ty : &Type) {
-    all_var_types.remove(&ty);
+fn remove_reachable_from(all_var_types: &mut HashSet<Type>, ty: &Type) {
+    all_var_types.remove(ty);
 
     // This is an unwrap because it is a programming error (or an error in the
     // library) if an entry is missing here.
-    let type_index = library_index().get(&ty).unwrap();
+    let type_index = library_index().get(ty).unwrap();
     for contained_ty in &type_index.contained_types {
-        remove_reachable_from(all_var_types, &contained_ty);
+        remove_reachable_from(all_var_types, contained_ty);
     }
 }
 
@@ -57,7 +59,8 @@ fn find_outermost_var_decl(decls: &Vec<VarDecl>) -> anyhow::Result<VarDecl> {
     // Create a set of all of the declared variables
     //
     // Remove elements from this set as we process the top-level decls
-    let mut all_var_types : HashSet<Type> = HashSet::from_iter(decls.iter().map(|vd| vd.type_.clone()));
+    let mut all_var_types: HashSet<Type> =
+        HashSet::from_iter(decls.iter().map(|vd| vd.type_.clone()));
     // let queued_types : HashSet<Type> = HashSet::new();
 
     // Iterate over each variable; remove any reachable from the currently
@@ -86,7 +89,11 @@ fn find_outermost_var_decl(decls: &Vec<VarDecl>) -> anyhow::Result<VarDecl> {
     // FIXME: Also validate that all of the variables are related (i.e., there
     // are no variables
 
-    res.ok_or_else(|| anyhow::anyhow!(PlanError::UnrelatedVariablesError(Vec::from_iter(decls.iter().map(|vd| vd.clone())))))
+    res.ok_or_else(|| {
+        anyhow::anyhow!(PlanError::UnrelatedVariablesError(Vec::from_iter(
+            decls.iter().cloned()
+        )))
+    })
 }
 
 /// Matches a conjunction that binds on the left and then evaluates a sub-tree on the right
@@ -94,37 +101,37 @@ fn find_outermost_var_decl(decls: &Vec<VarDecl>) -> anyhow::Result<VarDecl> {
 /// While this could normalize binders to come before evaluated sub-expressions,
 /// we currently don't support any rewriting of that form until we work out what
 /// the semantics should be.
-fn match_binder_form(e: &Expr<Typed>) -> anyhow::Result<Option<(VarDecl, Box<Expr<Typed>>, Box<Expr<Typed>>)>> {
+fn match_binder_form(
+    e: &Expr<Typed>,
+) -> anyhow::Result<Option<(VarDecl, Box<Expr<Typed>>, Box<Expr<Typed>>)>> {
     match &e.expr {
-        Expr_::LogicalConjunction(lhs, rhs) => {
-            match &lhs.expr {
-                Expr_::EqualityComparison(binder_lhs, op, binder_rhs) => {
-                    match (&binder_lhs.expr, op, &binder_rhs.expr) {
-                        (Expr_::VarRef(name), EqualityOp::EQ, Expr_::QualifiedAccess(_, _, _)) => {
-                            let access_b = insert_explicit_binders(&*binder_rhs)?;
-                            let var_decl = VarDecl {
-                                name: name.clone(),
-                                type_: binder_lhs.type_.clone(),
-                            };
-                            let eval_expr = insert_explicit_binders(rhs)?;
-                            Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
-                        },
-                        (Expr_::QualifiedAccess(_, _, _), EqualityOp::EQ, Expr_::VarRef(name)) => {
-                            let access_b = insert_explicit_binders(&*binder_lhs)?;
-                            let var_decl = VarDecl {
-                                name: name.clone(),
-                                type_: binder_lhs.type_.clone(),
-                            };
-                            let eval_expr = insert_explicit_binders(rhs)?;
-                            Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
-                        },
-                        _ => Ok(None)
+        Expr_::LogicalConjunction(lhs, rhs) => match &lhs.expr {
+            Expr_::EqualityComparison(binder_lhs, op, binder_rhs) => {
+                match (&binder_lhs.expr, op, &binder_rhs.expr) {
+                    (Expr_::VarRef(name), EqualityOp::EQ, Expr_::QualifiedAccess(_, _, _)) => {
+                        let access_b = insert_explicit_binders(binder_rhs)?;
+                        let var_decl = VarDecl {
+                            name: name.clone(),
+                            type_: binder_lhs.type_.clone(),
+                        };
+                        let eval_expr = insert_explicit_binders(rhs)?;
+                        Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
                     }
-                },
-                _ => Ok(None)
+                    (Expr_::QualifiedAccess(_, _, _), EqualityOp::EQ, Expr_::VarRef(name)) => {
+                        let access_b = insert_explicit_binders(binder_lhs)?;
+                        let var_decl = VarDecl {
+                            name: name.clone(),
+                            type_: binder_lhs.type_.clone(),
+                        };
+                        let eval_expr = insert_explicit_binders(rhs)?;
+                        Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
+                    }
+                    _ => Ok(None),
+                }
             }
+            _ => Ok(None),
         },
-        _ => Ok(None)
+        _ => Ok(None),
     }
 }
 
@@ -136,13 +143,13 @@ fn match_binder_form(e: &Expr<Typed>) -> anyhow::Result<Option<(VarDecl, Box<Exp
 /// evaluation model), all equalities would be relational and evaluated by the
 /// datalog engine.
 fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
-    let mbinder = match_binder_form(&e)?;
+    let mbinder = match_binder_form(e)?;
     match mbinder {
-        None => {},
+        None => {}
         Some((var_decl, access_b, eval_expr)) => {
             let binder = Expr {
                 expr: Expr_::Bind(var_decl, access_b, eval_expr),
-                type_: Type::PrimBoolean
+                type_: Type::PrimBoolean,
             };
             return Ok(binder);
         }
@@ -154,44 +161,44 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
             let rhs_b = insert_explicit_binders(rhs)?;
             let e_b = Expr {
                 expr: Expr_::EqualityComparison(Box::new(lhs_b), *op, Box::new(rhs_b)),
-                type_: e.type_.clone()
+                type_: e.type_.clone(),
             };
             Ok(e_b)
-        },
+        }
         Expr_::Bind(_, _, _) => {
             panic!("The binder rewriter should never have a `Bind` term as input")
-        },
+        }
         Expr_::ConstantExpr(_) => Ok(e.clone()),
         Expr_::VarRef(_) => Ok(e.clone()),
         Expr_::RelationalComparison(lhs, op, rhs) => {
-            let lhs_b = insert_explicit_binders(&lhs)?;
-            let rhs_b = insert_explicit_binders(&rhs)?;
+            let lhs_b = insert_explicit_binders(lhs)?;
+            let rhs_b = insert_explicit_binders(rhs)?;
             let e_b = Expr {
                 expr: Expr_::RelationalComparison(Box::new(lhs_b), *op, Box::new(rhs_b)),
                 type_: e.type_.clone(),
             };
             Ok(e_b)
-        },
+        }
         Expr_::LogicalConjunction(lhs, rhs) => {
-            let lhs_b = insert_explicit_binders(&lhs)?;
-            let rhs_b = insert_explicit_binders(&rhs)?;
+            let lhs_b = insert_explicit_binders(lhs)?;
+            let rhs_b = insert_explicit_binders(rhs)?;
             let e_b = Expr {
                 expr: Expr_::LogicalConjunction(Box::new(lhs_b), Box::new(rhs_b)),
                 type_: e.type_.clone(),
             };
             Ok(e_b)
-        },
+        }
         Expr_::LogicalDisjunction(lhs, rhs) => {
-            let lhs_b = insert_explicit_binders(&lhs)?;
-            let rhs_b = insert_explicit_binders(&rhs)?;
+            let lhs_b = insert_explicit_binders(lhs)?;
+            let rhs_b = insert_explicit_binders(rhs)?;
             let e_b = Expr {
                 expr: Expr_::LogicalDisjunction(Box::new(lhs_b), Box::new(rhs_b)),
                 type_: e.type_.clone(),
             };
             Ok(e_b)
-        },
+        }
         Expr_::QualifiedAccess(base, name, args) => {
-            let base_b = insert_explicit_binders(&base)?;
+            let base_b = insert_explicit_binders(base)?;
             let mut args_b = Vec::new();
             for arg in args.iter() {
                 let arg_b = insert_explicit_binders(arg)?;
@@ -204,7 +211,7 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
             };
 
             Ok(e_b)
-        },
+        }
         Expr_::Aggregate(op, args) => {
             let mut args_b = Vec::new();
 
@@ -212,7 +219,7 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
                 let arg_b = insert_explicit_binders(&arg.expr)?;
                 let as_arg_b = AsExpr {
                     expr: arg_b,
-                    ident: arg.ident.clone()
+                    ident: arg.ident.clone(),
                 };
                 args_b.push(as_arg_b);
             }
@@ -222,15 +229,13 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
                 type_: e.type_.clone(),
             };
             Ok(e_b)
-        },
+        }
     }
 }
 
 /// Generate a query plan for the given query that decides the order of
 /// evaluation for each variable and expression
-pub fn plan_query(
-    query: &Query<Typed>
-) -> anyhow::Result<QueryPlan> {
+pub fn plan_query(query: &Query<Typed>) -> anyhow::Result<QueryPlan> {
     let sel = &query.select;
     // First, order the declared variables by precedence
     // let stratified = stratify_actions(&sel.where_formula)?;
@@ -249,49 +254,59 @@ pub fn plan_query(
 
 #[test]
 fn rewrites_simple_binders() {
-    let ql = "from Method m, Parameter p where p = m.getAParameter() and p.getName() = \"log\" select p";
+    let ql =
+        "from Method m, Parameter p where p = m.getAParameter() and p.getName() = \"log\" select p";
     let parsed_query = parse_query(ql).unwrap();
     let typed_select = typecheck_query(parsed_query.select).unwrap();
     let typed_query = Query {
         query_ast: parsed_query.query_ast,
-        select: typed_select
+        select: typed_select,
     };
     let plan = plan_query(&typed_query).unwrap();
     // We only really need to check the where clause
     assert!(plan.var_decls.len() == 2);
     let var_decl = VarDecl {
         type_: Type::Parameter,
-        name: "p".into()
+        name: "p".into(),
     };
     let method_ref = Expr {
         expr: Expr_::VarRef("m".into()),
-        type_: Type::Method
+        type_: Type::Method,
     };
     let bound_val = Expr {
         expr: Expr_::QualifiedAccess(Box::new(method_ref), "getAParameter".into(), Vec::new()),
-        type_: Type::Relational(Box::new(Type::Parameter))
+        type_: Type::Relational(Box::new(Type::Parameter)),
     };
     let param_ref = Expr {
         expr: Expr_::VarRef("p".into()),
-        type_: Type::Parameter
+        type_: Type::Parameter,
     };
     let get_name_expr = Expr {
         expr: Expr_::QualifiedAccess(Box::new(param_ref), "getName".into(), Vec::new()),
-        type_: Type::PrimString
+        type_: Type::PrimString,
     };
     let log_string_expr = Expr {
         expr: Expr_::ConstantExpr(Constant::String_("log".into())),
-        type_: Type::PrimString
+        type_: Type::PrimString,
     };
     let eval_expr = Expr {
-        expr: Expr_::EqualityComparison(Box::new(get_name_expr), EqualityOp::EQ, Box::new(log_string_expr)),
-        type_: Type::PrimBoolean
+        expr: Expr_::EqualityComparison(
+            Box::new(get_name_expr),
+            EqualityOp::EQ,
+            Box::new(log_string_expr),
+        ),
+        type_: Type::PrimBoolean,
     };
     let expected_where = Expr {
         expr: Expr_::Bind(var_decl, Box::new(bound_val), Box::new(eval_expr)),
-        type_: Type::PrimBoolean
+        type_: Type::PrimBoolean,
     };
-    assert!(plan.where_formula == expected_where, "Expected \n`{:?}`, but found \n`{:?}`", expected_where, plan.where_formula);
+    assert!(
+        plan.where_formula == expected_where,
+        "Expected \n`{:?}`, but found \n`{:?}`",
+        expected_where,
+        plan.where_formula
+    );
 }
 
 /* Note [Query Plan Structure]

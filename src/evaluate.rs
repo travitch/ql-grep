@@ -1,5 +1,3 @@
-use tree_sitter;
-
 use crate::compile::interface::EvaluationContext;
 use crate::compile::node_filter::NodeFilter;
 use crate::compile::{CompiledQuery, QueryAction};
@@ -29,7 +27,7 @@ enum Value {
 /// This is currently set up as a very naive interpreter. In the future, the
 /// query planner could embed some of the numeric and logical computations into
 /// the individual filters to reduce the evaluation cost.
-fn evaluate_filter<'a, 'b : 'a>(
+fn evaluate_filter<'a, 'b: 'a>(
     target: &'b source_file::SourceFile,
     ctx: &'a mut EvaluationContext<'b>,
     flt: &NodeFilter,
@@ -96,7 +94,7 @@ pub fn evaluate_plan<'a>(
             for qm in cursor.matches(q, ast.root_node(), target.source.as_bytes()) {
                 let accept_node = {
                     eval_ctx.bind_node(root_var, qm.captures[0].node);
-                    let res = evaluate_filter(target, &mut eval_ctx, &flt)?;
+                    let res = evaluate_filter(target, &mut eval_ctx, flt)?;
                     match res {
                         Value::Constant(Constant::Boolean(b)) => b,
                         Value::Constant(_) => {

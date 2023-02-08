@@ -61,7 +61,7 @@ impl BoundNode {
             Type::Callable => BoundNode::Callable(CallableRef(name.into())),
             Type::Function => BoundNode::Callable(CallableRef(name.into())),
             Type::Method => BoundNode::Callable(CallableRef(name.into())),
-            _ => panic!("Unimplemented BoundNode type `{}`", ty),
+            _ => panic!("Unimplemented BoundNode type `{ty}`"),
         }
     }
 }

@@ -11,12 +11,14 @@ use std::rc::Rc;
 use crate::compile::backend::cpp::CPPTreeInterface;
 use crate::compile::backend::java::JavaTreeInterface;
 use crate::compile::errors::PlanError;
-use crate::compile::interface::{BoundNode, CallableRef, NodeMatcher, TreeInterface, ParameterRef};
+use crate::compile::interface::{BoundNode, CallableRef, NodeMatcher, ParameterRef, TreeInterface};
 use crate::compile::lift::transform_node_filter;
 use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
 use crate::plan::QueryPlan;
-use crate::query::ir::{AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Repr, Typed, VarDecl};
+use crate::query::ir::{
+    AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Repr, Typed, VarDecl,
+};
 use crate::query::val_type::Type;
 use crate::source_file::{Language, SourceFile};
 
@@ -48,7 +50,7 @@ struct Context {
 }
 
 impl Context {
-    fn new(var_decls: &Vec<VarDecl>) -> Self {
+    fn new(var_decls: &[VarDecl]) -> Self {
         let mut t = HashMap::new();
 
         for var_decl in var_decls.iter() {
@@ -109,7 +111,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                         extract: Rc::new(move |_, _| CallableRef::new(this_s.as_ref())),
                     };
                     Ok(NodeFilter::CallableComputation(m))
-                },
+                }
                 Type::Parameter => {
                     let this_s = s.clone();
                     let m = NodeMatcher {
@@ -119,12 +121,9 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                         }),
                     };
                     Ok(NodeFilter::ArgumentComputation(m))
-                },
+                }
                 ty => {
-                    panic!(
-                        "References to variables of type `{}` are not yet supported",
-                        ty
-                    );
+                    panic!("References to variables of type `{ty}` are not yet supported");
                 }
             }
         }
@@ -173,7 +172,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                     panic!("Impossible: relational comparison applied to unsupported type");
                 }
             }
-        },
+        }
         Expr_::Bind(var_decl, relation_expr, eval_expr) => {
             // Wrap the computation to be evaluated in a wrapper of the
             // appropriate type that binds `var_decl` for each possible value.
@@ -182,17 +181,15 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             //
             // Critically, if there are no matches, the binder must evaluate to
             // false to reflect that there were no values to relationally bind.
-            let compiled_eval_expr = compile_expr(Rc::clone(&ti), &eval_expr)?;
+            let compiled_eval_expr = compile_expr(Rc::clone(&ti), eval_expr)?;
             let eval_func = match compiled_eval_expr {
-                NodeFilter::Predicate(nm) => {
-                    nm
-                },
+                NodeFilter::Predicate(nm) => nm,
                 nf => {
                     panic!("Invalid non-predicate node filter as expression evaluated under a binder: {}", nf.kind());
                 }
             };
 
-            let compiled_binder = compile_expr(Rc::clone(&ti), &relation_expr)?;
+            let compiled_binder = compile_expr(Rc::clone(&ti), relation_expr)?;
             match compiled_binder {
                 NodeFilter::ArgumentListComputation(param_comp) => {
                     let param_ref = ParameterRef::new(&var_decl.name);
@@ -209,17 +206,17 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                                 // thing being selected.
                                 result = result || (eval_func.extract)(ctx, source);
                             }
-                            return result;
+                            result
                         }),
                     };
 
                     Ok(NodeFilter::Predicate(m))
-                },
+                }
                 _ => {
                     panic!("Unexpected binder type: {}", compiled_binder.kind());
                 }
             }
-        },
+        }
         Expr_::EqualityComparison(lhs, op, rhs) => {
             let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
             let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;

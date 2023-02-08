@@ -109,7 +109,7 @@ where
                     let matcher = transform_body(arg_list_matcher, NodeFilter::ArgumentComputation, as_type, xfrm);
                     Some(NodeFilter::TypeListComputation(matcher))
                 },
-                _ => panic!("Unsupported conversion from Argument (only String is supported), result type `{}`", result_type)
+                _ => panic!("Unsupported conversion from Argument (only String is supported), result type `{result_type}`")
             }
         }
         NodeFilter::StringListComputation(string_list_matcher) => {
@@ -124,7 +124,7 @@ where
                     Some(NodeFilter::PredicateListComputation(matcher))
                 }
                 _ => {
-                    panic!("Unsupported conversion from `string` to `{}`", result_type);
+                    panic!("Unsupported conversion from `string` to `{result_type}`");
                 }
             }
         }
@@ -140,7 +140,7 @@ where
                     Some(NodeFilter::StringListComputation(matcher))
                 }
                 _ => {
-                    panic!("Unsupported conversion from `Type` to `{}`", result_type);
+                    panic!("Unsupported conversion from `Type` to `{result_type}`");
                 }
             }
         }

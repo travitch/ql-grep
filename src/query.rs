@@ -5,8 +5,6 @@ pub mod parser;
 pub mod typecheck;
 pub mod val_type;
 
-use tree_sitter;
-
 use crate::query::error::QueryError;
 use crate::query::ir::*;
 use crate::query::parser::parse_query_ast;

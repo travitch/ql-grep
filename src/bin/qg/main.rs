@@ -3,12 +3,12 @@ use crossbeam_channel::{bounded, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 use std::path::PathBuf;
 use std::thread;
-use tracing::{info, warn, error, Level};
+use tracing::{error, info, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use ql_grep::{
-    plan_query, compile_query, evaluate_plan, parse_query, typecheck_query, Query, QueryResult, SourceFile,
-    Syntax, Typed, LIBRARY_DATA,
+    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, Query, QueryResult,
+    SourceFile, Syntax, Typed, LIBRARY_DATA,
 };
 
 mod cli;
@@ -38,7 +38,11 @@ struct QueryResults {
     source_file: SourceFile,
 }
 
-fn process_query(query: &Query<Typed>, sf: &SourceFile, ast: &tree_sitter::Tree) -> anyhow::Result<Vec<QueryResult>> {
+fn process_query(
+    query: &Query<Typed>,
+    sf: &SourceFile,
+    ast: &tree_sitter::Tree,
+) -> anyhow::Result<Vec<QueryResult>> {
     let mut cursor = tree_sitter::QueryCursor::new();
     let query_plan = plan_query(query)?;
     let compiled_query = compile_query(sf, ast, &query_plan)?;
@@ -65,7 +69,7 @@ fn visit_file(
                     match process_query(query, &sf, &ast) {
                         Err(e) => {
                             error!("Error while parsing `{}`: {}", dir_ent.path().display(), e);
-                        },
+                        }
                         Ok(mut result) => {
                             res_storage.append(&mut result);
                         }
@@ -107,7 +111,7 @@ fn print_match(fmt_opts: &FormatOptions, sf: &SourceFile, qr: &QueryResult) {
     match qr {
         QueryResult::Constant(v) => {
             println!("{}", sf.file_path.display());
-            println!("  {:?}", v);
+            println!("  {v:?}");
         }
         QueryResult::Node(rng) => {
             println!(
@@ -124,11 +128,11 @@ fn print_match(fmt_opts: &FormatOptions, sf: &SourceFile, qr: &QueryResult) {
                 }
                 Ok(s) => {
                     if !fmt_opts.number_lines {
-                        println!("{}", s);
+                        println!("{s}");
                     } else {
                         let mut line_num = rng.start_point.row;
                         for line in s.lines() {
-                            println!("{} {}", line_num, line);
+                            println!("{line_num} {line}");
                             line_num += 1;
                         }
                     }
@@ -139,7 +143,7 @@ fn print_match(fmt_opts: &FormatOptions, sf: &SourceFile, qr: &QueryResult) {
 }
 
 fn print_library() {
-    println!("{}", LIBRARY_DATA);
+    println!("{LIBRARY_DATA}");
 }
 
 fn main() -> anyhow::Result<()> {
