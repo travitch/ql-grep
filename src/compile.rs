@@ -17,16 +17,10 @@ use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
 use crate::plan::QueryPlan;
 use crate::query::ir::{
-    AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Repr, Typed, VarDecl,
+    AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Typed, VarDecl,
 };
 use crate::query::val_type::Type;
 use crate::source_file::{Language, SourceFile};
-
-pub struct Matching;
-
-impl Repr for Matching {
-    type Type = Type;
-}
 
 /// The actions that comprise a query plan
 pub enum QueryAction {
