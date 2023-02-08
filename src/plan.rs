@@ -236,7 +236,6 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
 /// evaluation for each variable and expression
 pub fn plan_query(query: &Select<Typed>) -> anyhow::Result<QueryPlan> {
     // First, order the declared variables by precedence
-    // let stratified = stratify_actions(&sel.where_formula)?;
     let outermost_var = find_outermost_var_decl(&query.var_decls)?;
     let rewritten_expr = insert_explicit_binders(&query.where_formula)?;
 
