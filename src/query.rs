@@ -12,17 +12,11 @@ use crate::query::parser::parse_query_ast;
 #[cfg(test)]
 use crate::query::val_type::Type;
 
-/// An abstract representation of queries
-pub struct Query<R: Repr> {
-    pub query_ast: tree_sitter::Tree,
-    pub select: Select<R>,
-}
-
 extern "C" {
     fn tree_sitter_ql() -> tree_sitter::Language;
 }
 
-pub fn parse_query(text: impl AsRef<[u8]>) -> anyhow::Result<Query<Syntax>> {
+pub fn parse_query(text: impl AsRef<[u8]>) -> anyhow::Result<Select<Syntax>> {
     let mut parser = tree_sitter::Parser::new();
 
     // If this fails, it really is a programming error as this parser should be
@@ -32,14 +26,7 @@ pub fn parse_query(text: impl AsRef<[u8]>) -> anyhow::Result<Query<Syntax>> {
 
     match parser.parse(&text, None) {
         None => Err(anyhow::anyhow!(QueryError::QueryParseError)),
-        Some(t) => {
-            let sel = parse_query_ast(&t, &text)?;
-            let q = Query {
-                query_ast: t,
-                select: sel,
-            };
-            Ok(q)
-        }
+        Some(t) => parse_query_ast(&t, &text)
     }
 }
 
@@ -92,7 +79,7 @@ fn select_one_constant() {
         where_formula: CONST_TRUE,
         var_decls: Vec::new(),
     };
-    assert_eq!(expected, r.unwrap().select);
+    assert_eq!(expected, r.unwrap());
 }
 
 #[test]
@@ -110,7 +97,7 @@ fn select_named_constant() {
         where_formula: CONST_TRUE,
         var_decls: Vec::new(),
     };
-    assert_eq!(expected, r.unwrap().select);
+    assert_eq!(expected, r.unwrap());
 }
 
 #[test]
@@ -133,7 +120,7 @@ fn select_two_constants() {
         where_formula: CONST_TRUE,
         var_decls: Vec::new(),
     };
-    assert_eq!(expected, r.unwrap().select);
+    assert_eq!(expected, r.unwrap());
 }
 
 #[test]
@@ -153,7 +140,7 @@ fn select_with_decls() {
         var_decls: declare(&[(Type::Function, "x"), (Type::Method, "m")]),
     };
 
-    assert_eq!(expected, r.unwrap().select);
+    assert_eq!(expected, r.unwrap());
 }
 
 #[test]
@@ -186,7 +173,7 @@ fn string_literal() {
         var_decls: declare(&[(Type::Method, "m")]),
     };
 
-    assert_eq!(expected, r.unwrap().select);
+    assert_eq!(expected, r.unwrap());
 }
 
 #[test]
@@ -217,7 +204,7 @@ fn predicate_argument() {
         var_decls: declare(&[(Type::Method, "m")]),
     };
 
-    assert_eq!(expected, r.unwrap().select);
+    assert_eq!(expected, r.unwrap());
 }
 
 #[test]
@@ -259,5 +246,5 @@ fn select_filter_parameter_count() {
         var_decls: declare(&[(Type::Method, "m")]),
     };
 
-    assert_eq!(expected, r.unwrap().select);
+    assert_eq!(expected, r.unwrap());
 }

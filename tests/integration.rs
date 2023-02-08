@@ -7,8 +7,8 @@ use test_generator::test_resources;
 use toml::de;
 
 use ql_grep::{
-    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, Query, QueryResult,
-    SourceFile, Typed,
+    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryResult,
+    Select, SourceFile, Typed,
 };
 
 /// A single test case to run ql-grep over, with expected results
@@ -41,7 +41,7 @@ impl Statistics {
 }
 
 fn visit_file(
-    query: &Query<Typed>,
+    query: &Select<Typed>,
     send: Sender<QueryResults>,
     ent: Result<DirEntry, ignore::Error>,
 ) -> WalkState {
@@ -80,11 +80,7 @@ fn execute_query(toml_file_path: &str) {
     root_dir.push(test_case.codebase);
 
     let parsed_query = parse_query(test_case.query).unwrap();
-    let typed_select = typecheck_query(parsed_query.select).unwrap();
-    let typed_query = Query {
-        query_ast: parsed_query.query_ast,
-        select: typed_select,
-    };
+    let typed_query = typecheck_query(parsed_query).unwrap();
 
     let (send, recv) = bounded::<QueryResults>(4096);
 

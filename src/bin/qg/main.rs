@@ -7,8 +7,8 @@ use tracing::{error, info, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use ql_grep::{
-    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, Query, QueryResult,
-    SourceFile, Syntax, Typed, LIBRARY_DATA,
+    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryResult,
+    Select, SourceFile, Syntax, Typed, LIBRARY_DATA,
 };
 
 mod cli;
@@ -18,7 +18,7 @@ mod cli;
 fn make_query(
     query_string: &Option<String>,
     query_path: &Option<PathBuf>,
-) -> anyhow::Result<Query<Syntax>> {
+) -> anyhow::Result<Select<Syntax>> {
     match query_string {
         Some(s) => parse_query(s),
         None => match query_path {
@@ -39,7 +39,7 @@ struct QueryResults {
 }
 
 fn process_query(
-    query: &Query<Typed>,
+    query: &Select<Typed>,
     sf: &SourceFile,
     ast: &tree_sitter::Tree,
 ) -> anyhow::Result<Vec<QueryResult>> {
@@ -51,7 +51,7 @@ fn process_query(
 }
 
 fn visit_file(
-    query: &Query<Typed>,
+    query: &Select<Typed>,
     send: Sender<QueryResults>,
     ent: Result<DirEntry, ignore::Error>,
 ) -> WalkState {
@@ -169,12 +169,7 @@ fn main() -> anyhow::Result<()> {
     let root_dir = args.root.unwrap_or(cwd);
 
     let query = make_query(&args.query_string, &args.query_path)?;
-    let typed_select = typecheck_query(query.select)?;
-    let typed_query = Query {
-        query_ast: query.query_ast,
-        select: typed_select,
-    };
-
+    let typed_select = typecheck_query(query)?;
     let (send, recv) = bounded::<QueryResults>(4096);
 
     // Spawn a thread to collect all of the intermediate results produced by
@@ -205,7 +200,7 @@ fn main() -> anyhow::Result<()> {
         .threads(8)
         .build_parallel()
         .run(|| {
-            let q = &typed_query;
+            let q = &typed_select;
             let sender = send.clone();
             Box::new(move |ent| visit_file(q, sender.clone(), ent))
         });

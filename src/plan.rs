@@ -8,9 +8,8 @@
 use std::collections::HashSet;
 
 use crate::library::index::library_index;
-use crate::query::ir::{AsExpr, EqualityOp, Expr, Expr_, Typed, VarDecl};
+use crate::query::ir::{AsExpr, EqualityOp, Expr, Expr_, Select, Typed, VarDecl};
 use crate::query::val_type::Type;
-use crate::query::Query;
 
 #[cfg(test)]
 use crate::query::ir::Constant;
@@ -235,17 +234,16 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
 
 /// Generate a query plan for the given query that decides the order of
 /// evaluation for each variable and expression
-pub fn plan_query(query: &Query<Typed>) -> anyhow::Result<QueryPlan> {
-    let sel = &query.select;
+pub fn plan_query(query: &Select<Typed>) -> anyhow::Result<QueryPlan> {
     // First, order the declared variables by precedence
     // let stratified = stratify_actions(&sel.where_formula)?;
-    let outermost_var = find_outermost_var_decl(&sel.var_decls)?;
-    let rewritten_expr = insert_explicit_binders(&sel.where_formula)?;
+    let outermost_var = find_outermost_var_decl(&query.var_decls)?;
+    let rewritten_expr = insert_explicit_binders(&query.where_formula)?;
 
     let qp = QueryPlan {
-        selected_exprs: sel.select_exprs.clone(),
+        selected_exprs: query.select_exprs.clone(),
         where_formula: rewritten_expr,
-        var_decls: sel.var_decls.clone(),
+        var_decls: query.var_decls.clone(),
         root_var: outermost_var,
     };
 
@@ -257,12 +255,8 @@ fn rewrites_simple_binders() {
     let ql =
         "from Method m, Parameter p where p = m.getAParameter() and p.getName() = \"log\" select p";
     let parsed_query = parse_query(ql).unwrap();
-    let typed_select = typecheck_query(parsed_query.select).unwrap();
-    let typed_query = Query {
-        query_ast: parsed_query.query_ast,
-        select: typed_select,
-    };
-    let plan = plan_query(&typed_query).unwrap();
+    let typed_select = typecheck_query(parsed_query).unwrap();
+    let plan = plan_query(&typed_select).unwrap();
     // We only really need to check the where clause
     assert!(plan.var_decls.len() == 2);
     let var_decl = VarDecl {
