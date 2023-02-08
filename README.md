@@ -83,7 +83,7 @@ The second major release will focus on adding support for slightly deeper semant
 
 # Alternatives
 
-There are other fantastic code search tools based on the tree-sitter infrastructure.
+There are other fantastic code search tools, some of which are based on the tree-sitter infrastructure.
 
 ## weggli
 
