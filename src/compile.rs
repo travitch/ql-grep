@@ -16,9 +16,7 @@ use crate::compile::lift::transform_node_filter;
 use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
 use crate::plan::QueryPlan;
-use crate::query::ir::{
-    AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Typed, VarDecl,
-};
+use crate::query::ir::{AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Typed, VarDecl};
 use crate::query::val_type::Type;
 use crate::source_file::{Language, SourceFile};
 
@@ -120,12 +118,18 @@ fn compile_var_ref(var_name: &str, var_type: &Type) -> anyhow::Result<NodeFilter
         }
         ty => {
             let msg = format!("References to variables of type `{ty}` are not yet supported");
-            Err(anyhow::anyhow!(PlanError::GeneralUnsupported(msg.to_string())))
+            Err(anyhow::anyhow!(PlanError::GeneralUnsupported(
+                msg.to_string()
+            )))
         }
     }
 }
 
-fn compile_relational_comparison(lhs: NodeFilter, op: CompOp, rhs: NodeFilter) -> anyhow::Result<NodeFilter> {
+fn compile_relational_comparison(
+    lhs: NodeFilter,
+    op: CompOp,
+    rhs: NodeFilter,
+) -> anyhow::Result<NodeFilter> {
     match (lhs, rhs) {
         (NodeFilter::NumericComputation(lhs_n), NodeFilter::NumericComputation(rhs_n)) => {
             let lhs_f = Rc::clone(&lhs_n.extract);
@@ -172,7 +176,11 @@ fn compile_relational_comparison(lhs: NodeFilter, op: CompOp, rhs: NodeFilter) -
     }
 }
 
-fn compile_equality_comparison(lhs: NodeFilter, op: EqualityOp, rhs: NodeFilter) -> anyhow::Result<NodeFilter> {
+fn compile_equality_comparison(
+    lhs: NodeFilter,
+    op: EqualityOp,
+    rhs: NodeFilter,
+) -> anyhow::Result<NodeFilter> {
     match (lhs, rhs) {
         (NodeFilter::NumericComputation(lhs_n), NodeFilter::NumericComputation(rhs_n)) => {
             let lhs_f = Rc::clone(&lhs_n.extract);
@@ -218,63 +226,62 @@ fn compile_equality_comparison(lhs: NodeFilter, op: EqualityOp, rhs: NodeFilter)
                 }
             }
         }
-        (
-            NodeFilter::StringListComputation(lhs_s),
-            NodeFilter::StringComputation(rhs_s),
-        ) => match op {
-            EqualityOp::EQ => {
-                let rhs_fn = Rc::clone(&rhs_s.extract);
-                let lifted = transform_node_filter(
-                    Type::PrimBoolean,
-                    &NodeFilter::StringListComputation(lhs_s),
-                    Rc::new(move |elt: Rc<NodeFilter>| {
-                        let rhs_fn_ref = Rc::clone(&rhs_fn);
-                        match &*elt {
-                            NodeFilter::StringComputation(sc) => {
-                                let sc_ref = Rc::clone(&sc.extract);
-                                let m = NodeMatcher {
-                                    extract: Rc::new(move |ctx, source| {
-                                        sc_ref(ctx, source) == rhs_fn_ref(ctx, source)
-                                    }),
-                                };
-                                Ok(NodeFilter::Predicate(m))
+        (NodeFilter::StringListComputation(lhs_s), NodeFilter::StringComputation(rhs_s)) => {
+            match op {
+                EqualityOp::EQ => {
+                    let rhs_fn = Rc::clone(&rhs_s.extract);
+                    let lifted = transform_node_filter(
+                        Type::PrimBoolean,
+                        &NodeFilter::StringListComputation(lhs_s),
+                        Rc::new(move |elt: Rc<NodeFilter>| {
+                            let rhs_fn_ref = Rc::clone(&rhs_fn);
+                            match &*elt {
+                                NodeFilter::StringComputation(sc) => {
+                                    let sc_ref = Rc::clone(&sc.extract);
+                                    let m = NodeMatcher {
+                                        extract: Rc::new(move |ctx, source| {
+                                            sc_ref(ctx, source) == rhs_fn_ref(ctx, source)
+                                        }),
+                                    };
+                                    Ok(NodeFilter::Predicate(m))
+                                }
+                                _ => {
+                                    panic!("Invalid branch, expected a string computation")
+                                }
                             }
-                            _ => {
-                                panic!("Invalid branch, expected a string computation")
+                        }),
+                    )
+                    .unwrap();
+                    Ok(lifted)
+                }
+                EqualityOp::NE => {
+                    let rhs_fn = Rc::clone(&rhs_s.extract);
+                    let lifted = transform_node_filter(
+                        Type::PrimBoolean,
+                        &NodeFilter::StringListComputation(lhs_s),
+                        Rc::new(move |elt: Rc<NodeFilter>| {
+                            let rhs_fn_ref = Rc::clone(&rhs_fn);
+                            match &*elt {
+                                NodeFilter::StringComputation(sc) => {
+                                    let sc_ref = Rc::clone(&sc.extract);
+                                    let m = NodeMatcher {
+                                        extract: Rc::new(move |ctx, source| {
+                                            sc_ref(ctx, source) != rhs_fn_ref(ctx, source)
+                                        }),
+                                    };
+                                    Ok(NodeFilter::Predicate(m))
+                                }
+                                _ => {
+                                    panic!("Invalid branch, expected a string computation")
+                                }
                             }
-                        }
-                    }),
-                )
-                .unwrap();
-                Ok(lifted)
+                        }),
+                    )
+                    .unwrap();
+                    Ok(lifted)
+                }
             }
-            EqualityOp::NE => {
-                let rhs_fn = Rc::clone(&rhs_s.extract);
-                let lifted = transform_node_filter(
-                    Type::PrimBoolean,
-                    &NodeFilter::StringListComputation(lhs_s),
-                    Rc::new(move |elt: Rc<NodeFilter>| {
-                        let rhs_fn_ref = Rc::clone(&rhs_fn);
-                        match &*elt {
-                            NodeFilter::StringComputation(sc) => {
-                                let sc_ref = Rc::clone(&sc.extract);
-                                let m = NodeMatcher {
-                                    extract: Rc::new(move |ctx, source| {
-                                        sc_ref(ctx, source) != rhs_fn_ref(ctx, source)
-                                    }),
-                                };
-                                Ok(NodeFilter::Predicate(m))
-                            }
-                            _ => {
-                                panic!("Invalid branch, expected a string computation")
-                            }
-                        }
-                    }),
-                )
-                .unwrap();
-                Ok(lifted)
-            }
-        },
+        }
         _ => {
             panic!("Impossible equality comparison");
         }

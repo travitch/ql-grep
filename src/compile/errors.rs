@@ -17,5 +17,5 @@ pub enum PlanError {
     #[error("Querying {0} is not supported in {1} for this language")]
     NotSupported(String, String),
     #[error("Unsupported feature in compilation: {0}")]
-    GeneralUnsupported(String)
+    GeneralUnsupported(String),
 }
