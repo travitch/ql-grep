@@ -2,7 +2,7 @@ use clap::{arg, Parser};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
-#[command(name = "tg")]
+#[command(name = "qg")]
 #[command(about = "A grep for source code built on tree-sitter", long_about = None)]
 pub struct Cli {
     #[arg(value_name = "QUERY", help = "A literal CodeQL query", group = "query")]
