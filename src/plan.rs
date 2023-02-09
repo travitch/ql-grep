@@ -302,7 +302,7 @@ fn rewrites_simple_binders() {
     );
 }
 
-/* Note [Query Plan Structure]
+/* [tag:query_plan_structure]
 
 This module builds a query plan that nests queries for relational values in an
 efficient order for evaluation.  As an example, if a query selects:

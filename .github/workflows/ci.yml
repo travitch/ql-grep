@@ -20,3 +20,7 @@ jobs:
           command: build
       - name: test
         run: cargo test
+      - name: Tag checking
+        run: |
+          curl https://raw.githubusercontent.com/stepchowfun/tagref/main/install.sh -LSfs | sh
+          tagref
