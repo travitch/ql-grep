@@ -7,8 +7,8 @@ use test_generator::test_resources;
 use toml::de;
 
 use ql_grep::{
-    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryResult,
-    Select, SourceFile, Typed,
+    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryResult, Select,
+    SourceFile, Typed,
 };
 
 /// A single test case to run ql-grep over, with expected results

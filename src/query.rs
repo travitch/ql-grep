@@ -26,7 +26,7 @@ pub fn parse_query(text: impl AsRef<[u8]>) -> anyhow::Result<Select<Syntax>> {
 
     match parser.parse(&text, None) {
         None => Err(anyhow::anyhow!(QueryError::QueryParseError)),
-        Some(t) => parse_query_ast(&t, &text)
+        Some(t) => parse_query_ast(&t, &text),
     }
 }
 

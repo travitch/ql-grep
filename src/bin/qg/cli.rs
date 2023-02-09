@@ -15,4 +15,6 @@ pub struct Cli {
     pub number_lines: bool,
     #[arg(long, help = "Print out the supported CodeQL types and methods")]
     pub print_library: bool,
+    #[arg(long, help = "A file to write log events to (instead of stderr)")]
+    pub log_file: Option<PathBuf>,
 }

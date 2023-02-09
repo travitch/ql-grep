@@ -1,14 +1,16 @@
 use clap::Parser;
 use crossbeam_channel::{bounded, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
+use std::fs::File;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::thread;
 use tracing::{error, info, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use ql_grep::{
-    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryResult,
-    Select, SourceFile, Syntax, Typed, LIBRARY_DATA,
+    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryResult, Select,
+    SourceFile, Syntax, Typed, LIBRARY_DATA,
 };
 
 mod cli;
@@ -107,6 +109,9 @@ struct FormatOptions {
 }
 
 /// Print this result to the console
+///
+/// Results go to standard out rather than the logs, as logs should be able to
+/// be redirected separately.
 fn print_match(fmt_opts: &FormatOptions, sf: &SourceFile, qr: &QueryResult) {
     match qr {
         QueryResult::Constant(v) => {
@@ -146,6 +151,26 @@ fn print_library() {
     println!("{LIBRARY_DATA}");
 }
 
+fn initialize_logging(log_file_path: &Option<PathBuf>) -> anyhow::Result<()> {
+    let subscriber_builder = FmtSubscriber::builder()
+        .with_max_level(Level::WARN)
+        .with_env_filter(EnvFilter::from_default_env());
+    match log_file_path {
+        None => {
+            let subscriber = subscriber_builder.finish();
+            tracing::subscriber::set_global_default(subscriber)
+                .expect("setting default subscriber failed");
+        }
+        Some(p) => {
+            let f = File::create(p)?;
+            let subscriber = subscriber_builder.with_writer(Mutex::new(f)).finish();
+            tracing::subscriber::set_global_default(subscriber)
+                .expect("setting default subscriber failed");
+        }
+    };
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();
 
@@ -155,11 +180,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Set up logging
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::WARN)
-        .with_env_filter(EnvFilter::from_default_env())
-        .finish();
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    initialize_logging(&args.log_file)?;
 
     let fmt_opts = FormatOptions {
         number_lines: args.number_lines,
@@ -173,7 +194,7 @@ fn main() -> anyhow::Result<()> {
     let (send, recv) = bounded::<QueryResults>(4096);
 
     // Spawn a thread to collect all of the intermediate results produced by
-    // worker threads
+    // worker threads over the channel.
     let accumulator_handle = thread::spawn(move || {
         let mut stats = Statistics::new();
 
