@@ -218,7 +218,7 @@ fn main() -> anyhow::Result<()> {
     });
 
     WalkBuilder::new(root_dir)
-        .threads(8)
+        .threads(args.num_threads.unwrap_or(num_cpus::get()))
         .build_parallel()
         .run(|| {
             let q = &typed_select;
