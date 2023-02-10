@@ -86,6 +86,29 @@ fn callable_get_a_parameter<'a>(
     }
 }
 
+/// Returns True if the method contains a parse error
+///
+/// Implements:
+/// - [ref:library:Callable:hasParseError]
+/// - [ref:library:Function:hasParseError]
+/// - [ref:library:Method:hasParseError]
+fn callable_has_parse_error<'a>(
+    ti: Rc<dyn TreeInterface>,
+    base: &'a NodeFilter,
+    operands: &'a Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::CallableComputation(callable_matcher) => {
+            let error_matcher = ti.callable_has_parse_error(callable_matcher);
+            Ok(NodeFilter::Predicate(error_matcher))
+        },
+        _ => {
+            panic!("Implementation error: only callables should be possible here");
+        }
+    }
+}
+
 /// Match a string against a regular expression
 ///
 /// Implements:
@@ -260,6 +283,8 @@ fn validate_library(impls: &HashMap<(Type, String), Handler>) {
 ///
 /// The keys of the map are the base type and the method name being looked
 /// up. The value in the map is the handler for that method in the planner.
+///
+/// [tag:method_impls_map]
 static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     let mut impls = HashMap::new();
 
@@ -287,6 +312,19 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     impls.insert(
         (Type::Callable, "getAParameter".into()),
         Handler(Arc::new(callable_get_a_parameter)),
+    );
+
+    impls.insert(
+        (Type::Method, "hasParseError".into()),
+        Handler(Arc::new(callable_has_parse_error)),
+    );
+    impls.insert(
+        (Type::Function, "hasParseError".into()),
+        Handler(Arc::new(callable_has_parse_error)),
+    );
+    impls.insert(
+        (Type::Callable, "hasParseError".into()),
+        Handler(Arc::new(callable_has_parse_error)),
     );
 
     impls.insert(

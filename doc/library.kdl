@@ -23,6 +23,8 @@ type "Function" {
     method "getName" type="string" tag="[tag:library:Function:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"
+    method "hasParseError" type="boolean" tag="[tag:library:Function:hasParseError]" \
+        docstring=r"Returns True if the function contains a parse error"
 }
 
 type "Method" {
@@ -37,6 +39,8 @@ type "Method" {
     method "getName" type="string" tag="[tag:library:Method:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"
+    method "hasParseError" type="boolean" tag="[tag:library:Method:hasParseError]" \
+        docstring=r"Returns True if the method contains a parse error"
 }
 
 type "Callable" {
@@ -51,6 +55,8 @@ type "Callable" {
     method "getName" type="string" tag="[tag:library:Callable:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"
+    method "hasParseError" type="boolean" tag="[tag:library:Callable:hasParseError]" \
+        docstring=r"Returns True if the callable contains a parse error"
 }
 
 // Parameters are *formal* parameters of function definitions/declarations

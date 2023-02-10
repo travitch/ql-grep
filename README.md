@@ -77,6 +77,11 @@ The supported CodeQL objects and methods are documented in [a file](doc/library.
 
 # Roadmap
 
+`ql-grep` is in a very early prototype stage.  There will be rough edges and many missing features.
+
+- It is currently primarily a command line tool
+- There is a library interface, but it is poorly thought-out and incomplete (requests welcome)
+
 ## 1.0
 
 This will be the initial release with a focus on largely syntactic and local queries.  Planned supported languages include:

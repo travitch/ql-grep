@@ -18,14 +18,14 @@ impl TreeInterface for JavaTreeInterface {
     // we get rid of var ref and just have a typed computation
     fn top_level_type(&self, t: &Type) -> Option<TopLevelMatcher> {
         match t {
-            Type::Method => {
+            Type::Method | Type::Callable => {
                 let matcher = TopLevelMatcher {
                     query: "(method_declaration) @method.declaration".into(),
                     tag: "@method.declaration".into(),
                 };
 
                 Some(matcher)
-            }
+            },
             _ => None,
         }
     }
@@ -67,6 +67,22 @@ impl TreeInterface for JavaTreeInterface {
             }),
         };
         Some(matcher)
+    }
+
+    fn callable_has_parse_error(&self, base: &NodeMatcher<CallableRef>) -> NodeMatcher<bool> {
+        let get_callable_ref = Rc::clone(&base.extract);
+        NodeMatcher {
+            extract: Rc::new(move |ctx, source| {
+                let callable_ref = get_callable_ref(ctx, source);
+                let node = ctx.lookup_callable(&callable_ref);
+                let mut cur = tree_sitter::QueryCursor::new();
+                let ql_query = "(method_declaration body: (_ (ERROR) @err))";
+                let query = tree_sitter::Query::new(node.language(), ql_query)
+                    .unwrap_or_else(|e| panic!("Error while querying for errors {e:?}"));
+                let qms = cur.matches(&query, *node, source);
+                qms.count() != 0
+            }),
+        }
     }
 }
 

@@ -1,0 +1,12 @@
+# Find all methods that have a parse error (across multiple languages)
+#
+# Note that this does not match the C example because C does not have methods
+# (neither does C++, according to the tree-sitter grammar)
+
+query = """
+from Method m
+where m.hasParseError()
+select m
+"""
+codebase = "feature/has-parse-error"
+num_matches = 1

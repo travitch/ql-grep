@@ -53,6 +53,10 @@ impl Context {
     }
 }
 
+/// Examine the given source file and determine which tree-sitter adapter to use
+/// while processing it.
+///
+/// [tag:tree_sitter_interface_dispatcher]
 fn make_tree_interface(file: &SourceFile) -> Rc<dyn TreeInterface> {
     match file.lang {
         Language::CPP => Rc::new(CPPTreeInterface::new(file)) as Rc<dyn TreeInterface>,
@@ -118,9 +122,7 @@ fn compile_var_ref(var_name: &str, var_type: &Type) -> anyhow::Result<NodeFilter
         }
         ty => {
             let msg = format!("References to variables of type `{ty}` are not yet supported");
-            Err(anyhow::anyhow!(PlanError::GeneralUnsupported(
-                msg.to_string()
-            )))
+            Err(anyhow::anyhow!(PlanError::GeneralUnsupported(msg)))
         }
     }
 }
@@ -499,6 +501,8 @@ pub fn compile_query<'a>(
                 .get(var)
                 .ok_or_else(|| anyhow::anyhow!(PlanError::UndeclaredVariable(var.into())))?;
             let unsupported = PlanError::UnsupportedTypeForLanguage(ty.clone(), source.lang);
+            // NOTE: If the top-level selected type is not supported, the query
+            // is just not compiled for this file
             let top_level = tree_interface
                 .top_level_type(ty)
                 .ok_or_else(|| anyhow::anyhow!(unsupported))?;

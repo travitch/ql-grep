@@ -17,7 +17,7 @@ impl CPPTreeInterface {
 impl TreeInterface for CPPTreeInterface {
     fn top_level_type(&self, t: &Type) -> Option<TopLevelMatcher> {
         match t {
-            Type::Function => {
+            Type::Function | Type::Callable => {
                 let matcher = TopLevelMatcher {
                     query: "(function_definition) @function.definition".into(),
                     tag: "@function.definition".into(),
@@ -66,6 +66,22 @@ impl TreeInterface for CPPTreeInterface {
             }),
         };
         Some(matcher)
+    }
+
+    fn callable_has_parse_error(&self, base: &NodeMatcher<CallableRef>) -> NodeMatcher<bool> {
+        let get_callable_ref = Rc::clone(&base.extract);
+        NodeMatcher {
+            extract: Rc::new(move |ctx, source| {
+                let callable_ref = get_callable_ref(ctx, source);
+                let node = ctx.lookup_callable(&callable_ref);
+                let mut cur = tree_sitter::QueryCursor::new();
+                let ql_query = "(function_definition body: (_ (ERROR) @err))";
+                let query = tree_sitter::Query::new(node.language(), ql_query)
+                    .unwrap_or_else(|e| panic!("Error while querying for errors {e:?}"));
+                let qms = cur.matches(&query, *node, source);
+                qms.count() != 0
+            }),
+        }
     }
 }
 
