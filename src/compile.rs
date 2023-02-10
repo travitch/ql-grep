@@ -59,7 +59,7 @@ impl Context {
 /// [tag:tree_sitter_interface_dispatcher]
 fn make_tree_interface(file: &SourceFile) -> Rc<dyn TreeInterface> {
     match file.lang {
-        Language::CPP => Rc::new(CPPTreeInterface::new(file)) as Rc<dyn TreeInterface>,
+        Language::Cpp => Rc::new(CPPTreeInterface::new(file)) as Rc<dyn TreeInterface>,
         Language::Java => Rc::new(JavaTreeInterface::new(file)) as Rc<dyn TreeInterface>,
         Language::Python => unimplemented!(),
     }

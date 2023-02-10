@@ -21,7 +21,7 @@ pub enum SourceError {
 /// [tag:language_enum_definition]
 #[derive(Debug, Copy, Clone)]
 pub enum Language {
-    CPP,
+    Cpp,
     Java,
     Python,
 }
@@ -35,15 +35,15 @@ lazy_static! {
         // let python_lang = unsafe { tree_sitter_python() };
 
         let mut m = HashMap::new();
-        m.insert("c".into(), (c_lang, Language::CPP));
-        m.insert("cpp".into(), (cpp_lang, Language::CPP));
-        m.insert("cxx".into(), (cpp_lang, Language::CPP));
-        m.insert("cc".into(), (cpp_lang, Language::CPP));
-        m.insert("C".into(), (cpp_lang, Language::CPP));
-        m.insert("hpp".into(), (cpp_lang, Language::CPP));
-        m.insert("hh".into(), (cpp_lang, Language::CPP));
-        m.insert("hxx".into(), (cpp_lang, Language::CPP));
-        m.insert("h".into(), (cpp_lang, Language::CPP));
+        m.insert("c".into(), (c_lang, Language::Cpp));
+        m.insert("cpp".into(), (cpp_lang, Language::Cpp));
+        m.insert("cxx".into(), (cpp_lang, Language::Cpp));
+        m.insert("cc".into(), (cpp_lang, Language::Cpp));
+        m.insert("C".into(), (cpp_lang, Language::Cpp));
+        m.insert("hpp".into(), (cpp_lang, Language::Cpp));
+        m.insert("hh".into(), (cpp_lang, Language::Cpp));
+        m.insert("hxx".into(), (cpp_lang, Language::Cpp));
+        m.insert("h".into(), (cpp_lang, Language::Cpp));
         m.insert("java".into(), (java_lang, Language::Java));
         // m.insert("py".into(), (python_lang, Language::Python));
         m
