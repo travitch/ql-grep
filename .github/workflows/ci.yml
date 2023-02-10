@@ -1,3 +1,5 @@
+# Note: the tests are run in release mode because it is significantly faster
+# than the debug build, while the compile times are not very different
 on: [push, pull_request, pull_request_target]
 name: build
 jobs:
@@ -12,15 +14,16 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - name: dependencies
+      - name: Install dependencies
         run:  sudo apt install build-essential
-      - name: build
+      - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
-      - name: test
-        run: cargo test
-      - name: Tag checking
+          args: --release
+      - name: Run tests
+        run: cargo test --release
+      - name: Ensure that documentation cross-references are consistent
         run: |
           curl https://raw.githubusercontent.com/stepchowfun/tagref/main/install.sh -LSfs | sh
           tagref
