@@ -14,13 +14,13 @@
 type "Function" {
     contains "Parameter"
     contains "Call"
-    method "getAParameter" type="Relational<Parameter>" \
+    method "getAParameter" type="Relational<Parameter>"  tag="[tag:library:Function:getAParameter]" \
         docstring=r"Return any parameter in the function signature; this is intended to be used in a relational context."
     method "getParameter" type="Parameter" status="Unimplemented" {
         parameter "index" type="int"
     }
-    method "getType" type="Type" status="Unimplemented"
-    method "getName" type="string"
+    method "getType" type="Type" status="Unimplemented" tag="[tag:library:function:getType]"
+    method "getName" type="string" tag="[tag:library:Function:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"
 }
@@ -28,13 +28,13 @@ type "Function" {
 type "Method" {
     contains "Parameter"
     contains "Call"
-    method "getAParameter" type="Relational<Parameter>" \
+    method "getAParameter" type="Relational<Parameter>" tag="[tag:library:Method:getAParameter]" \
         docstring=r"Return any parameter in the method signature; this is intended to be used in a relational context."
     method "getParameter" type="Parameter" status="Unimplemented" {
         parameter "index" type="int"
     }
     method "getType" type="Type" status="Unimplemented"
-    method "getName" type="string"
+    method "getName" type="string" tag="[tag:library:Method:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"
 }
@@ -42,22 +42,22 @@ type "Method" {
 type "Callable" {
     contains "Parameter"
     contains "Call"
-    method "getAParameter" type="Relational<Parameter>" \
+    method "getAParameter" type="Relational<Parameter>" tag="[tag:library:Callable:getAParameter]" \
         docstring=r"Return any parameter in signature of the callable; this is intended to be used in a relational context."
     method "getParameter" type="Parameter" status="Unimplemented" {
         parameter "index" type="int"
     }
     method "getType" type="Type" status="Unimplemented"
-    method "getName" type="string"
+    method "getName" type="string" tag="[tag:library:Callable:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"
 }
 
 // Parameters are *formal* parameters of function definitions/declarations
 type "Parameter" {
-    method "getType" type="Type" \
+    method "getType" type="Type" tag="[tag:library:Parameter:getType]" \
         docstring=r"Return the type of the parameter (`Any` if the language is untyped)."
-    method "getName" type="string"
+    method "getName" type="string" tag="[tag:library:Parameter:getName]"
     method "getIndex" type="int" status="Unimplemented"
 }
 
@@ -77,7 +77,7 @@ type "Expr" {
 }
 
 type "Type" {
-    method "getName" type="string"
+    method "getName" type="string" ref="[tag:library:Type:getName]"
 }
 
 type "Regex" {
@@ -86,6 +86,6 @@ type "Regex" {
 
 type "string" {
     method "regexpMatch" type="boolean" {
-        parameter "regexp" type="Regex"
+        parameter "regexp" type="Regex" ref="[tag:library:string:regexpMatch]"
     }
 }
