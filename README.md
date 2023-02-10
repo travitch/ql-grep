@@ -20,7 +20,7 @@ cargo build --release
 # Run ql-grep
 ./target/release/qg --help
 
-# Example: find all of the functions with two parameters that tree-sitter cannot completely parse correctly
+# Example: find all of the functions with two parameters that tree-sitter cannot completely parse correctly in the Linux kernel
 ./target/release/qg --root ./tests/codebases/linux/ 'from Function f where count(f.getAParameter()) = 2 and f.hasParseError() select f'
 ```
 
