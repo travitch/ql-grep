@@ -9,10 +9,6 @@ The CodeQL constructs supporting in `ql-grep` are documented in [The Library](do
 
 By using `ql-grep`, you acknowledge that you understand that it is unsound and incomplete. It is a liar and a cheat. It may produce useful results, but provides no guarantees about anything.
 
-# Examples
-
-See the [examples](examples/) directory for numerous CodeQL query examples with explanatory commentary.  These examples are part of the test suite for the parser and type checker, so they should be reflective of what `ql-grep` supports.  There are additional examples in the [integration test suite](tests/integration), which are executed on a set of large codebases in the test suite.
-
 # Getting Started
 
 Building `ql-grep` requires a working C++ compiler (for the tree-sitter grammars) and a rust toolchain.  To build it, run the following commands:
@@ -22,10 +18,19 @@ git submodule update --init --depth 1
 cargo build --release
 
 # Run ql-grep
-./target/release/qg
+./target/release/qg --help
+
+# Example: find all of the functions with two parameters that tree-sitter cannot completely parse correctly
+./target/release/qg --root ./tests/codebases/linux/ 'from Function f where count(f.getAParameter()) = 2 and f.hasParseError() select f'
 ```
 
+Queries can be passed directly as an argument or via the `--query-path` flag.
+
 Note that building in release mode is strongly encouraged.  The debug build works fine, but produces enormous (>700MB) binaries.
+
+## More Examples
+
+See the [examples](examples/) directory for numerous CodeQL query examples with explanatory commentary.  These examples are part of the test suite for the parser and type checker, so they should be reflective of what `ql-grep` supports.  There are additional examples in the [integration test suite](tests/integration), which are executed on a set of large codebases in the test suite.
 
 # Design
 
