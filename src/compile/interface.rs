@@ -168,6 +168,8 @@ pub struct FormalArgument {
 ///
 /// In cases where structure is sufficiently uniform, we should use normal
 /// functions instead.
+///
+/// [tag:tree_interface_definition]
 pub trait TreeInterface {
     /// Return a matcher for a type declared in the From clause of a QL query
     ///
@@ -187,4 +189,8 @@ pub trait TreeInterface {
     /// This is tailored to just callables because getting the name of other
     /// types of nodes requires different patterns
     fn callable_name(&self, node: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<String>>;
+
+    /// Returns True if the given callable contains a parse error (according to
+    /// tree-sitter)
+    fn callable_has_parse_error(&self, node: &NodeMatcher<CallableRef>) -> NodeMatcher<bool>;
 }

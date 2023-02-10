@@ -53,9 +53,19 @@ fn visit_file(
             {
                 let mut cursor = tree_sitter::QueryCursor::new();
                 let query_plan = plan_query(query).unwrap();
-                let compiled_query = compile_query(&sf, &ast, &query_plan).unwrap();
-                let mut result = evaluate_plan(&sf, &ast, &mut cursor, &compiled_query).unwrap();
-                res_storage.append(&mut result);
+                // If a query fails to compile for one source language, that is
+                // potentially okay - it might just mean that a feature in the
+                // query is not supported for all target languages.  The
+                // expected results will let us know if the failure is
+                // unexpected.
+                match compile_query(&sf, &ast, &query_plan) {
+                    Ok(compiled_query) => {
+                        let mut result = evaluate_plan(&sf, &ast, &mut cursor, &compiled_query).unwrap();
+                        res_storage.append(&mut result);
+                    },
+                    Err(_) => {
+                    }
+                }
             }
             // Send the result to the aggregation thread
             let qr = QueryResults {

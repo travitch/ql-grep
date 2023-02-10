@@ -1,0 +1,11 @@
+# Find all callables that have a parse error (across multiple languages)
+#
+# Make sure there is a source file for each language with at least one parse error
+
+query = """
+from Callable c
+where c.hasParseError()
+select c
+"""
+codebase = "feature/has-parse-error"
+num_matches = 2

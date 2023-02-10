@@ -15,6 +15,10 @@ pub enum SourceError {
     ParseError(PathBuf),
 }
 
+/// The languages supported by ql-grep; these are used for run-time selection of
+/// language-specific adapters in the query engine.
+///
+/// [tag:language_enum_definition]
 #[derive(Debug, Copy, Clone)]
 pub enum Language {
     CPP,
