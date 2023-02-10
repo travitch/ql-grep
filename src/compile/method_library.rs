@@ -34,6 +34,12 @@ pub struct Handler(
     >,
 );
 
+/// Get the name of a callable using the language interface
+///
+/// Implements:
+/// - [ref:library:Function:getName]
+/// - [ref:library:Method:getName]
+/// - [ref:library:Callable:getName]
 fn callable_get_name<'a>(
     ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
@@ -56,6 +62,11 @@ fn callable_get_name<'a>(
 }
 
 /// This is a relational method that returns a *list* of parameters
+///
+/// Implements:
+/// - [ref:library:Function:getAParameter]
+/// - [ref:library:Method:getAParameter]
+/// - [ref:library:Callable:getAParameter]
 fn callable_get_a_parameter<'a>(
     ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
@@ -75,6 +86,10 @@ fn callable_get_a_parameter<'a>(
     }
 }
 
+/// Match a string against a regular expression
+///
+/// Implements:
+/// - [ref:library:string:regexpMatch]
 fn string_regexp_match<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
@@ -104,6 +119,10 @@ fn string_regexp_match<'a>(
     Ok(NodeFilter::Predicate(comp))
 }
 
+/// Get the name of a formal parameter (of a callable object)
+///
+/// Implements:
+/// - [ref:library:Parameter:getName]
 fn parameter_get_name<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
@@ -126,6 +145,10 @@ fn parameter_get_name<'a>(
     }
 }
 
+/// Get the type of a formal parameter (of a callable object)
+///
+/// Implements:
+/// - [ref:library:Parameter:getType]
 fn parameter_get_type<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
@@ -152,6 +175,10 @@ fn parameter_get_type<'a>(
     }
 }
 
+/// Get the name of a Type as a String
+///
+/// Implements:
+/// - [ref:library:Type:getName]
 fn type_get_name<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
