@@ -17,4 +17,6 @@ pub struct Cli {
     pub print_library: bool,
     #[arg(long, help = "A file to write log events to (instead of stderr)")]
     pub log_file: Option<PathBuf>,
+    #[arg(long, help = "The number of threads to use (default: all)")]
+    pub num_threads: Option<usize>,
 }
