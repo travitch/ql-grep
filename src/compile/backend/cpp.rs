@@ -193,6 +193,12 @@ fn parse_declarator<'a>(n: &'a Node, src: &'a [u8]) -> Declarator {
             // FIXME: Figure out what this actually is
             Declarator::Unnamed
         }
+        "qualified_identifier" => {
+            Declarator::Unnamed
+        }
+        "abstract_parenthesized_declarator" => {
+            Declarator::Unnamed
+        }
         k => {
             panic!("Unsupported C/C++ declarator type `{k}`");
         }
