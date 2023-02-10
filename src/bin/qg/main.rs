@@ -217,8 +217,11 @@ fn main() -> anyhow::Result<()> {
         stats
     });
 
+    // Run in parallel, but reserve at least one core if the user has not
+    // explicitly requested a number of threads to avoid totally drowning the
+    // system
     WalkBuilder::new(root_dir)
-        .threads(args.num_threads.unwrap_or(num_cpus::get()))
+        .threads(args.num_threads.unwrap_or(std::cmp::max(1, num_cpus::get()) - 1))
         .build_parallel()
         .run(|| {
             let q = &typed_select;
