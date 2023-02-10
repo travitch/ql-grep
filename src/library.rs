@@ -62,6 +62,8 @@ pub struct Method {
     pub docstring: Option<String>,
     #[knuffel(children(name = "parameter"))]
     pub parameters: Vec<Parameter>,
+    #[knuffel(property, str)]
+    pub tag: Option<String>,
 }
 
 /// This type is factored out so that we can use the `str` knuffel parser; it

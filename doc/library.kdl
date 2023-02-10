@@ -77,7 +77,7 @@ type "Expr" {
 }
 
 type "Type" {
-    method "getName" type="string" ref="[tag:library:Type:getName]"
+    method "getName" type="string" tag="[tag:library:Type:getName]"
 }
 
 type "Regex" {
@@ -85,7 +85,7 @@ type "Regex" {
 }
 
 type "string" {
-    method "regexpMatch" type="boolean" {
-        parameter "regexp" type="Regex" ref="[tag:library:string:regexpMatch]"
+    method "regexpMatch" type="boolean" tag="[tag:library:string:regexpMatch]" {
+        parameter "regexp" type="Regex"
     }
 }
