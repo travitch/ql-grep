@@ -58,7 +58,7 @@ fn visit_file(
                 // query is not supported for all target languages.  The
                 // expected results will let us know if the failure is
                 // unexpected.
-                match compile_query(sf.lang, &ast, &query_plan) {
+                match compile_query(sf.lang, ast.language(), &query_plan) {
                     Ok(compiled_query) => {
                         let mut result = evaluate_plan(&sf, &ast, &mut cursor, &compiled_query).unwrap();
                         res_storage.append(&mut result);
