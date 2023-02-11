@@ -158,6 +158,7 @@ impl LanguageType {
 pub struct FormalArgument {
     pub name: Option<String>,
     pub declared_type: Option<LanguageType>,
+    pub index: usize,
 }
 
 /// The interface for generating tree matchers for each language

@@ -43,8 +43,10 @@ impl TreeInterface for CPPTreeInterface {
                 let query = tree_sitter::Query::new(node.language(), ql_query)
                     .unwrap_or_else(|e| panic!("Error while querying arguments {e:?}"));
                 let qms = cur.matches(&query, *node, source);
-                qms.map(|m| parameter_node_to_argument(&m.captures[0].node, source))
-                    .collect()
+                let params = qms.enumerate()
+                    .map(|(idx, m)| parameter_node_to_argument(&m.captures[0].node, source, idx))
+                    .collect();
+                params
             }),
         };
         Some(matcher)
@@ -205,7 +207,7 @@ fn parse_declarator<'a>(n: &'a Node, src: &'a [u8]) -> Declarator {
     }
 }
 
-fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8]) -> FormalArgument {
+fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8], idx: usize) -> FormalArgument {
     let decl = n
         .child_by_field_name("declarator")
         .map(|n| parse_declarator(&n, src));
@@ -214,5 +216,6 @@ fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8]) -> FormalArgument 
     FormalArgument {
         name: decl.map(|d| d.type_name().into()),
         declared_type: ty,
+        index: idx,
     }
 }
