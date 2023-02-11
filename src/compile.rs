@@ -18,7 +18,7 @@ use crate::compile::node_filter::NodeFilter;
 use crate::plan::QueryPlan;
 use crate::query::ir::{AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Typed, VarDecl};
 use crate::query::val_type::Type;
-use crate::source_file::{Language, SourceFile};
+use crate::source_file::Language;
 
 /// The actions that comprise a query plan
 pub enum QueryAction {
@@ -57,10 +57,10 @@ impl Context {
 /// while processing it.
 ///
 /// [tag:tree_sitter_interface_dispatcher]
-fn make_tree_interface(file: &SourceFile) -> Rc<dyn TreeInterface> {
-    match file.lang {
-        Language::Cpp => Rc::new(CPPTreeInterface::new(file)) as Rc<dyn TreeInterface>,
-        Language::Java => Rc::new(JavaTreeInterface::new(file)) as Rc<dyn TreeInterface>,
+fn make_tree_interface(lang: Language) -> Rc<dyn TreeInterface> {
+    match lang {
+        Language::Cpp => Rc::new(CPPTreeInterface::new()) as Rc<dyn TreeInterface>,
+        Language::Java => Rc::new(JavaTreeInterface::new()) as Rc<dyn TreeInterface>,
         Language::Python => unimplemented!(),
     }
 }
@@ -459,7 +459,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
 /// language is fairly different). Note that the caller should cache query plans
 /// to avoid recomputing them.
 pub fn compile_query<'a>(
-    source: &'a SourceFile,
+    lang: Language,
     ast: &'a tree_sitter::Tree,
     query_plan: &'a QueryPlan,
 ) -> anyhow::Result<CompiledQuery> {
@@ -485,7 +485,7 @@ pub fn compile_query<'a>(
         return Err(anyhow::anyhow!(PlanError::NonSingletonSelect(num_selected)));
     }
 
-    let tree_interface: Rc<dyn TreeInterface> = make_tree_interface(source);
+    let tree_interface: Rc<dyn TreeInterface> = make_tree_interface(lang);
     let ctx = Context::new(&query_plan.var_decls);
 
     match &query_plan.selected_exprs[0].expr.expr {
@@ -500,7 +500,7 @@ pub fn compile_query<'a>(
                 .symbol_table
                 .get(var)
                 .ok_or_else(|| anyhow::anyhow!(PlanError::UndeclaredVariable(var.into())))?;
-            let unsupported = PlanError::UnsupportedTypeForLanguage(ty.clone(), source.lang);
+            let unsupported = PlanError::UnsupportedTypeForLanguage(ty.clone(), lang);
             // NOTE: If the top-level selected type is not supported, the query
             // is just not compiled for this file
             let top_level = tree_interface

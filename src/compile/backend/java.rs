@@ -3,12 +3,11 @@ use tree_sitter::Node;
 
 use crate::compile::interface::*;
 use crate::query::val_type::Type;
-use crate::source_file::SourceFile;
 
 pub struct JavaTreeInterface {}
 
 impl JavaTreeInterface {
-    pub fn new(_f: &SourceFile) -> Self {
+    pub fn new() -> Self {
         JavaTreeInterface {}
     }
 }
