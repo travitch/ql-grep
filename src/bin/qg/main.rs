@@ -47,7 +47,7 @@ fn process_query(
 ) -> anyhow::Result<Vec<QueryResult>> {
     let mut cursor = tree_sitter::QueryCursor::new();
     let query_plan = plan_query(query)?;
-    let compiled_query = compile_query(sf, ast, &query_plan)?;
+    let compiled_query = compile_query(sf.lang, ast, &query_plan)?;
     let result = evaluate_plan(sf, ast, &mut cursor, &compiled_query)?;
     Ok(result)
 }

@@ -4,12 +4,11 @@ use tree_sitter::Node;
 use crate::compile::interface::*;
 use crate::query::parser::get_child_of_kind;
 use crate::query::val_type::Type;
-use crate::source_file::SourceFile;
 
 pub struct CPPTreeInterface {}
 
 impl CPPTreeInterface {
-    pub fn new(_f: &SourceFile) -> Self {
+    pub fn new() -> Self {
         CPPTreeInterface {}
     }
 }
