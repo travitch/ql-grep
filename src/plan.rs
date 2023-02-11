@@ -19,6 +19,7 @@ use crate::query::parse_query;
 use crate::query::typecheck::typecheck_query;
 
 /// This wraps up the contents of the original query in a more structured form
+#[derive(Debug)]
 pub struct QueryPlan {
     pub selected_exprs: Vec<AsExpr<Typed>>,
     pub where_formula: Expr<Typed>,
