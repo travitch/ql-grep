@@ -1,0 +1,9 @@
+# Check that the parameter index method works
+
+query = """
+from Function f, Parameter p
+where p = f.getAParameter() and (p.getType().getName() = "int" and p.getIndex() = 0)
+select f
+"""
+codebase = "feature/parameter-index"
+num_matches = 1

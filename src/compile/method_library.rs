@@ -198,6 +198,32 @@ fn parameter_get_type<'a>(
     }
 }
 
+/// Get the index of the parameter in the parameter list
+///
+/// Implements:
+/// - [ref:library:Parameter:getIndex]
+fn parameter_get_index<'a>(
+    _ti: Rc<dyn TreeInterface>,
+    base: &'a NodeFilter,
+    operands: &'a Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::ArgumentComputation(c) => {
+            let x = Rc::clone(&c.extract);
+            let comp = NodeMatcher {
+                extract: Rc::new(move |ctx, source| {
+                    x(ctx, source).index as i32
+                })
+            };
+            Ok(NodeFilter::NumericComputation(comp))
+        }
+        _ => {
+            panic!("Invalid base value for Parameter.getIndex");
+        }
+    }
+}
+
 /// Get the name of a Type as a String
 ///
 /// Implements:
@@ -334,6 +360,10 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     impls.insert(
         (Type::Parameter, "getType".into()),
         Handler(Arc::new(parameter_get_type)),
+    );
+    impls.insert(
+        (Type::Parameter, "getIndex".into()),
+        Handler(Arc::new(parameter_get_index)),
     );
 
     impls.insert(

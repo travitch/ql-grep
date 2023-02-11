@@ -44,7 +44,8 @@ impl TreeInterface for JavaTreeInterface {
                 let query = tree_sitter::Query::new(node.language(), ql_query)
                     .unwrap_or_else(|e| panic!("Error while querying arguments {e:?}"));
                 let qms = cur.matches(&query, *node, source);
-                qms.map(|m| parameter_node_to_argument(&m.captures[0].node, source))
+                qms.enumerate()
+                    .map(|(idx, m)| parameter_node_to_argument(&m.captures[0].node, source, idx))
                     .collect()
             }),
         };
@@ -94,7 +95,7 @@ fn parse_type_node<'a>(n: &'a Node, src: &'a [u8]) -> LanguageType {
     LanguageType::new(n.utf8_text(src).unwrap())
 }
 
-fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8]) -> FormalArgument {
+fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8], idx: usize) -> FormalArgument {
     let ty_node = n.child_by_field_name("type").unwrap();
     let ty = parse_type_node(&ty_node, src);
     let ident_node = n.child_by_field_name("name").unwrap();
@@ -103,5 +104,6 @@ fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8]) -> FormalArgument 
     FormalArgument {
         name: Some(ident.into()),
         declared_type: Some(ty),
+        index: idx,
     }
 }

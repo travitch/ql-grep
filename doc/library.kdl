@@ -64,7 +64,8 @@ type "Parameter" {
     method "getType" type="Type" tag="[tag:library:Parameter:getType]" \
         docstring=r"Return the type of the parameter (`Any` if the language is untyped)."
     method "getName" type="string" tag="[tag:library:Parameter:getName]"
-    method "getIndex" type="int" status="Unimplemented"
+    method "getIndex" type="int" tag="[tag:library:Parameter:getIndex]" \
+        docstring=r"Return the index of the parameter in the argument list"
 }
 
 type "Call" {
