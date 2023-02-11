@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::thread;
 use tracing::{error, info, warn, Level};
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tracing_subscriber::FmtSubscriber;
 
 use ql_grep::{
     compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryResult, Select,
@@ -153,11 +153,10 @@ fn print_library() {
 
 fn initialize_logging(log_file_path: &Option<PathBuf>) -> anyhow::Result<()> {
     let subscriber_builder = FmtSubscriber::builder()
-        .with_max_level(Level::WARN)
-        .with_env_filter(EnvFilter::from_default_env());
+        .with_max_level(Level::DEBUG);
     match log_file_path {
         None => {
-            let subscriber = subscriber_builder.finish();
+            let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
             tracing::subscriber::set_global_default(subscriber)
                 .expect("setting default subscriber failed");
         }
