@@ -206,6 +206,15 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
             let exprs = parse_as_exprs(as_exprs_node, source)?;
             Expr_::Aggregate(op, exprs)
         }
+        "par_expr" => {
+            // Parenthesized expressions have 3 children:
+            //
+            // LPAREN expr RPAREN
+            //
+            // The expr is the single named child
+            let inner_expr = parse_expr(node.named_child(0).unwrap(), source)?;
+            inner_expr.expr
+        }
         "qualified_expr" => {
             if node.named_child_count() != 2 {
                 return Err(anyhow::anyhow!(QueryError::MalformedNode(
