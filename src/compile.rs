@@ -460,7 +460,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
 /// to avoid recomputing them.
 pub fn compile_query<'a>(
     lang: Language,
-    ast: &'a tree_sitter::Tree,
+    ts_lang: tree_sitter::Language,
     query_plan: &'a QueryPlan,
 ) -> anyhow::Result<CompiledQuery> {
     // The basic idea is that we want to do as much processing as we can inside
@@ -506,7 +506,7 @@ pub fn compile_query<'a>(
             let top_level = tree_interface
                 .top_level_type(ty)
                 .ok_or_else(|| anyhow::anyhow!(unsupported))?;
-            let ts_query = tree_sitter::Query::new(ast.language(), &top_level.query)?;
+            let ts_query = tree_sitter::Query::new(ts_lang, &top_level.query)?;
             let flt = compile_expr(tree_interface, &query_plan.where_formula)?;
             let bound_node = BoundNode::new(var, ty);
             let p = CompiledQuery {

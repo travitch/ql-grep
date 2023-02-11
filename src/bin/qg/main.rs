@@ -9,8 +9,8 @@ use tracing::{error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use ql_grep::{
-    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryResult, Select,
-    SourceFile, Syntax, Typed, LIBRARY_DATA,
+    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryPlan, QueryResult, Select,
+    SourceFile, Syntax, LIBRARY_DATA,
 };
 
 mod cli;
@@ -41,19 +41,18 @@ struct QueryResults {
 }
 
 fn process_query(
-    query: &Select<Typed>,
+    query_plan: &QueryPlan,
     sf: &SourceFile,
     ast: &tree_sitter::Tree,
 ) -> anyhow::Result<Vec<QueryResult>> {
     let mut cursor = tree_sitter::QueryCursor::new();
-    let query_plan = plan_query(query)?;
-    let compiled_query = compile_query(sf.lang, ast, &query_plan)?;
+    let compiled_query = compile_query(sf.lang, ast.language(), &query_plan)?;
     let result = evaluate_plan(sf, ast, &mut cursor, &compiled_query)?;
     Ok(result)
 }
 
 fn visit_file(
-    query: &Select<Typed>,
+    query_plan: &QueryPlan,
     send: Sender<QueryResults>,
     ent: Result<DirEntry, ignore::Error>,
 ) -> WalkState {
@@ -68,7 +67,7 @@ fn visit_file(
                 }
                 Ok((sf, ast)) => {
                     let mut res_storage = Vec::new();
-                    match process_query(query, &sf, &ast) {
+                    match process_query(query_plan, &sf, &ast) {
                         Err(e) => {
                             error!("Error while parsing `{}`: {}", dir_ent.path().display(), e);
                         }
@@ -190,6 +189,7 @@ fn main() -> anyhow::Result<()> {
 
     let query = make_query(&args.query_string, &args.query_path)?;
     let typed_select = typecheck_query(query)?;
+    let query_plan = plan_query(&typed_select)?;
     let (send, recv) = bounded::<QueryResults>(4096);
 
     // Spawn a thread to collect all of the intermediate results produced by
@@ -223,7 +223,7 @@ fn main() -> anyhow::Result<()> {
         .threads(args.num_threads.unwrap_or(std::cmp::max(1, num_cpus::get()) - 1))
         .build_parallel()
         .run(|| {
-            let q = &typed_select;
+            let q = &query_plan;
             let sender = send.clone();
             Box::new(move |ent| visit_file(q, sender.clone(), ent))
         });

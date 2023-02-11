@@ -19,7 +19,7 @@ pub enum SourceError {
 /// language-specific adapters in the query engine.
 ///
 /// [tag:language_enum_definition]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum Language {
     Cpp,
     Java,
@@ -28,7 +28,7 @@ pub enum Language {
 
 lazy_static! {
     /// A map of file extensions to their corresponding parsers
-    static ref LANGUAGES: HashMap<OsString, (tree_sitter::Language, Language)> = {
+    static ref TREE_SITTER_LANGUAGES: HashMap<OsString, (tree_sitter::Language, Language)> = {
         let c_lang = unsafe { tree_sitter_c() };
         let cpp_lang = unsafe { tree_sitter_cpp() };
         let java_lang = unsafe { tree_sitter_java() };
@@ -75,7 +75,7 @@ impl SourceFile {
         let ext = path
             .extension()
             .ok_or_else(|| anyhow!(SourceError::MissingExtension(path.into())))?;
-        let (ts_lang, language) = LANGUAGES
+        let (ts_lang, language) = TREE_SITTER_LANGUAGES
             .get(ext)
             .ok_or_else(|| anyhow!(SourceError::UnsupportedFileType(ext.into())))?;
         let mut parser = tree_sitter::Parser::new();
