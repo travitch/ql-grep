@@ -157,10 +157,18 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
             let rhs = parse_expr(rhs_node, source)?;
             match op {
                 SomeComparison::RelComp(rop) => {
-                    Expr_::RelationalComparison(Box::new(lhs), rop, Box::new(rhs))
+                    Expr_::RelationalComparison {
+                        lhs: Box::new(lhs),
+                        op: rop,
+                        rhs: Box::new(rhs),
+                    }
                 }
                 SomeComparison::EqComp(eop) => {
-                    Expr_::EqualityComparison(Box::new(lhs), eop, Box::new(rhs))
+                    Expr_::EqualityComparison {
+                        lhs: Box::new(lhs),
+                        op: eop,
+                        rhs: Box::new(rhs)
+                    }
                 }
             }
         }
@@ -179,7 +187,10 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
                 ))
             })?;
             let rhs = parse_expr(rhs_node, source)?;
-            Expr_::LogicalConjunction(Box::new(lhs), Box::new(rhs))
+            Expr_::LogicalConjunction {
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            }
         }
         "disjunction" => {
             let lhs_node = node.child_by_field_name("left").ok_or_else(|| {
@@ -196,7 +207,10 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
                 ))
             })?;
             let rhs = parse_expr(rhs_node, source)?;
-            Expr_::LogicalDisjunction(Box::new(lhs), Box::new(rhs))
+            Expr_::LogicalDisjunction {
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            }
         }
         "aggregate" => {
             let op_node = get_child_of_kind(node, "aggId")?;
@@ -204,7 +218,7 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
             let agg_body = get_child_of_kind(node, "expr_aggregate_body")?;
             let as_exprs_node = get_child_of_kind(agg_body, "asExprs")?;
             let exprs = parse_as_exprs(as_exprs_node, source)?;
-            Expr_::Aggregate(op, exprs)
+            Expr_::Aggregate { op: op, operands: exprs }
         }
         "par_expr" => {
             // Parenthesized expressions have 3 children:
@@ -246,7 +260,11 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
             }
 
             let pred_name = name_node.utf8_text(source)?;
-            Expr_::QualifiedAccess(Box::new(expr), pred_name.into(), arguments)
+            Expr_::QualifiedAccess {
+                base: Box::new(expr),
+                method_name: pred_name.into(),
+                operands: arguments,
+            }
         }
         _ => {
             panic!("Unsupported expression: {}", node.kind())

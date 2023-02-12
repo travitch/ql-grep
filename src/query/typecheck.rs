@@ -144,7 +144,7 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
                 type_: ty.clone(),
             })
         }
-        Expr_::RelationalComparison(lhs, op, rhs) => {
+        Expr_::RelationalComparison { lhs, op, rhs } => {
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
 
@@ -196,11 +196,15 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
 
             let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
-                expr: Expr_::RelationalComparison(Box::new(lhs_ty), *op, Box::new(rhs_ty)),
+                expr: Expr_::RelationalComparison {
+                    lhs: Box::new(lhs_ty),
+                    op: *op,
+                    rhs: Box::new(rhs_ty),
+                },
                 type_: ret_ty,
             })
         }
-        Expr_::EqualityComparison(lhs, op, rhs) => {
+        Expr_::EqualityComparison { lhs, op, rhs } => {
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
 
@@ -219,11 +223,15 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
 
             let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
-                expr: Expr_::EqualityComparison(Box::new(lhs_ty), *op, Box::new(rhs_ty)),
+                expr: Expr_::EqualityComparison {
+                    lhs: Box::new(lhs_ty),
+                    op: *op,
+                    rhs: Box::new(rhs_ty)
+                },
                 type_: ret_ty,
             })
         }
-        Expr_::LogicalConjunction(lhs, rhs) => {
+        Expr_::LogicalConjunction { lhs, rhs } => {
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
 
@@ -245,11 +253,14 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
 
             let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
-                expr: Expr_::LogicalConjunction(Box::new(lhs_ty), Box::new(rhs_ty)),
+                expr: Expr_::LogicalConjunction {
+                    lhs: Box::new(lhs_ty),
+                    rhs: Box::new(rhs_ty)
+                },
                 type_: ret_ty,
             })
         }
-        Expr_::LogicalDisjunction(lhs, rhs) => {
+        Expr_::LogicalDisjunction { lhs, rhs } => {
             // Either operand (or both) may be Relational<bool>, in which case we treat that as any(val)
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;
@@ -272,13 +283,16 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
 
             let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
-                expr: Expr_::LogicalDisjunction(Box::new(lhs_ty), Box::new(rhs_ty)),
+                expr: Expr_::LogicalDisjunction {
+                    lhs: Box::new(lhs_ty),
+                    rhs: Box::new(rhs_ty),
+                },
                 type_: ret_ty,
             })
         }
-        Expr_::Aggregate(op, exprs) => {
+        Expr_::Aggregate { op, operands } => {
             let mut typed_exprs = Vec::new();
-            for expr in exprs {
+            for expr in operands {
                 let typed_as_expr = typecheck_as_expr(env, expr)?;
                 typed_exprs.push(typed_as_expr);
             }
@@ -312,11 +326,11 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
             };
 
             Ok(Expr {
-                expr: Expr_::Aggregate(*op, typed_exprs),
+                expr: Expr_::Aggregate { op: *op, operands: typed_exprs },
                 type_: ty,
             })
         }
-        Expr_::QualifiedAccess(base, accessor, operands) => {
+        Expr_::QualifiedAccess { base, method_name, operands } => {
             let mut typed_operands = Vec::new();
             for op in operands {
                 let typed_op = typecheck_expr(env, op)?;
@@ -333,28 +347,28 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
             let ty_index = env.type_index.get(&scalar_base_ty).ok_or_else(|| {
                 anyhow::anyhow!(TypecheckError::InvalidReceiverTypeForMethod(
                     base_ty.type_.clone(),
-                    accessor.clone()
+                    method_name.clone()
                 ))
             })?;
             let method_idx = &ty_index.method_index;
-            let MethodSignature(method_name, arg_types, ret_ty, _status) =
-                method_idx.get(accessor).ok_or_else(|| {
+            let MethodSignature(accessor, arg_types, ret_ty, _status) =
+                method_idx.get(method_name).ok_or_else(|| {
                     anyhow::anyhow!(TypecheckError::InvalidMethodForType(
-                        accessor.clone(),
+                        method_name.clone(),
                         base_ty.type_.clone()
                     ))
                 })?;
 
             if operands.len() != arg_types.len() {
                 let err = TypecheckError::InvalidArityForMethod(
-                    method_name.into(),
+                    accessor.into(),
                     operands.len(),
                     arg_types.len(),
                 );
                 return Err(anyhow::anyhow!(err));
             }
 
-            let mname = method_name.clone();
+            let mname = accessor.clone();
 
             let mut promoted_operands = Vec::new();
             // Next, we have to typecheck any operands
@@ -382,15 +396,15 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
             };
 
             Ok(Expr {
-                expr: Expr_::QualifiedAccess(
-                    Box::new(base_ty),
-                    accessor.clone(),
-                    promoted_operands,
-                ),
+                expr: Expr_::QualifiedAccess {
+                    base: Box::new(base_ty),
+                    method_name: method_name.clone(),
+                    operands: promoted_operands,
+                },
                 type_: promoted_ret_ty,
             })
         }
-        Expr_::Bind(_, _, _) => {
+        Expr_::Bind { .. } => {
             panic!("Bind expressions should not exist during type checking");
         }
     }
