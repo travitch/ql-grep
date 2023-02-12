@@ -294,12 +294,12 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
     match &e.expr {
         Expr_::ConstantExpr(v) => Ok(compile_constant(v)),
         Expr_::VarRef(s) => compile_var_ref(s, &e.type_),
-        Expr_::RelationalComparison(lhs, op, rhs) => {
+        Expr_::RelationalComparison { lhs, op, rhs } => {
             let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
             let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
             compile_relational_comparison(lhs_f, *op, rhs_f)
         }
-        Expr_::Bind(var_decl, relation_expr, eval_expr) => {
+        Expr_::Bind { bound_var, relation_expr, evaluated_expr } => {
             // Wrap the computation to be evaluated in a wrapper of the
             // appropriate type that binds `var_decl` for each possible value.
             // If there are no bindings, return False.  The expression under the
@@ -307,7 +307,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             //
             // Critically, if there are no matches, the binder must evaluate to
             // false to reflect that there were no values to relationally bind.
-            let compiled_eval_expr = compile_expr(Rc::clone(&ti), eval_expr)?;
+            let compiled_eval_expr = compile_expr(Rc::clone(&ti), evaluated_expr)?;
             let eval_func = match compiled_eval_expr {
                 NodeFilter::Predicate(nm) => nm,
                 nf => {
@@ -318,7 +318,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             let compiled_binder = compile_expr(Rc::clone(&ti), relation_expr)?;
             match compiled_binder {
                 NodeFilter::ArgumentListComputation(param_comp) => {
-                    let param_ref = ParameterRef::new(&var_decl.name);
+                    let param_ref = ParameterRef::new(&bound_var.name);
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
                             let param_ref_inner = param_ref.clone();
@@ -343,12 +343,12 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                 }
             }
         }
-        Expr_::EqualityComparison(lhs, op, rhs) => {
+        Expr_::EqualityComparison { lhs, op, rhs } => {
             let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
             let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
             compile_equality_comparison(lhs_f, *op, rhs_f)
         }
-        Expr_::LogicalConjunction(lhs, rhs) => {
+        Expr_::LogicalConjunction { lhs, rhs } => {
             assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
             let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
             let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
@@ -366,7 +366,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                 }
             }
         }
-        Expr_::LogicalDisjunction(lhs, rhs) => {
+        Expr_::LogicalDisjunction { lhs, rhs } => {
             assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
             let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
             let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
@@ -384,11 +384,11 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                 }
             }
         }
-        Expr_::Aggregate(op, exprs) => {
-            if exprs.len() != 1 {
+        Expr_::Aggregate { op, operands } => {
+            if operands.len() != 1 {
                 return Err(anyhow::anyhow!(PlanError::InvalidAggregateArity(
                     *op,
-                    exprs.len()
+                    operands.len()
                 )));
             }
 
@@ -396,7 +396,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                 AggregateOp::Count => {
                     // Count should have a single operand that evaluates to a list
 
-                    let op_f = compile_expr(ti, &exprs[0].expr)?;
+                    let op_f = compile_expr(ti, &operands[0].expr)?;
                     match op_f {
                         NodeFilter::ArgumentListComputation(arg_matcher) => {
                             let arg_count_matcher = NodeMatcher {
@@ -413,7 +413,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                 }
             }
         }
-        Expr_::QualifiedAccess(base, method, operands) => {
+        Expr_::QualifiedAccess { base, method_name, operands } => {
             // We store the method implementations in a map to keep this case of
             // the match reasonably-sized.  We look up method implementations
             // based on the method name and the base type computed by the type
@@ -424,7 +424,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             // implicitly treat Relational<T> values as List<T> for evaluation
             // purposes
             let scalar_base_type = base.type_.base_if_relational();
-            let handler = method_impl_for(scalar_base_type, method.clone());
+            let handler = method_impl_for(scalar_base_type, method_name.clone());
             match handler {
                 Some(Handler(f)) => {
                     let base_comp = compile_expr(Rc::clone(&ti), base)?;
@@ -445,7 +445,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                 None => {
                     panic!(
                         "No handler implemented for method `{}` of type `{}`",
-                        method, base.type_
+                        method_name, base.type_
                     );
                 }
             }

@@ -148,17 +148,17 @@ fn string_literal() {
     let ql = "from Method m where m.getName() = \"foo\" select m";
     let r = parse_query(ql);
 
-    let get_name = untyped(Expr_::QualifiedAccess(
-        Box::new(var_ref("m")),
-        "getName".into(),
-        Vec::new(),
-    ));
+    let get_name = untyped(Expr_::QualifiedAccess {
+        base: Box::new(var_ref("m")),
+        method_name: "getName".into(),
+        operands: Vec::new(),
+    });
     let str_lit = untyped(Expr_::ConstantExpr(Constant::String_("foo".into())));
-    let cmp = untyped(Expr_::EqualityComparison(
-        Box::new(get_name),
-        EqualityOp::EQ,
-        Box::new(str_lit),
-    ));
+    let cmp = untyped(Expr_::EqualityComparison {
+        lhs: Box::new(get_name),
+        op: EqualityOp::EQ,
+        rhs: Box::new(str_lit),
+    });
 
     let mut exprs = Vec::new();
     let as_expr = AsExpr {
@@ -185,11 +185,11 @@ fn predicate_argument() {
     let str_lit = untyped(Expr_::ConstantExpr(Constant::String_("foo".into())));
     let mut args = Vec::new();
     args.push(str_lit);
-    let rx_match = untyped(Expr_::QualifiedAccess(
-        Box::new(var_ref("m")),
-        "regexpMatch".into(),
-        args,
-    ));
+    let rx_match = untyped(Expr_::QualifiedAccess {
+        base: Box::new(var_ref("m")),
+        method_name: "regexpMatch".into(),
+        operands: args,
+    });
 
     let mut exprs = Vec::new();
     let as_expr = AsExpr {
@@ -221,24 +221,24 @@ fn select_filter_parameter_count() {
 
     let agg_body = AsExpr {
         expr: Expr {
-            expr: Expr_::QualifiedAccess(
-                Box::new(var_ref("m")),
-                "getAParameter".into(),
-                Vec::new(),
-            ),
+            expr: Expr_::QualifiedAccess {
+                base: Box::new(var_ref("m")),
+                method_name: "getAParameter".into(),
+                operands: Vec::new(),
+            },
             type_: Untyped,
         },
         ident: None,
     };
     let mut agg_exprs = Vec::new();
     agg_exprs.push(agg_body);
-    let lhs = untyped(Expr_::Aggregate(AggregateOp::Count, agg_exprs));
+    let lhs = untyped(Expr_::Aggregate { op: AggregateOp::Count, operands: agg_exprs });
     let rhs = untyped(Expr_::ConstantExpr(Constant::Integer(5)));
-    let cmp = untyped(Expr_::RelationalComparison(
-        Box::new(lhs),
-        CompOp::GT,
-        Box::new(rhs),
-    ));
+    let cmp = untyped(Expr_::RelationalComparison {
+        lhs: Box::new(lhs),
+        op: CompOp::GT,
+        rhs: Box::new(rhs),
+    });
 
     let expected = Select {
         select_exprs: exprs,

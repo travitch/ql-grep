@@ -105,25 +105,25 @@ fn match_binder_form(
     e: &Expr<Typed>,
 ) -> anyhow::Result<Option<(VarDecl, Box<Expr<Typed>>, Box<Expr<Typed>>)>> {
     match &e.expr {
-        Expr_::LogicalConjunction(lhs, rhs) => match &lhs.expr {
-            Expr_::EqualityComparison(binder_lhs, op, binder_rhs) => {
-                match (&binder_lhs.expr, op, &binder_rhs.expr) {
-                    (Expr_::VarRef(name), EqualityOp::EQ, Expr_::QualifiedAccess(_, _, _)) => {
-                        let access_b = insert_explicit_binders(binder_rhs)?;
+        Expr_::LogicalConjunction { lhs: log_lhs, rhs: log_rhs } => match &log_lhs.expr {
+            Expr_::EqualityComparison { lhs: eq_lhs, op, rhs: eq_rhs } => {
+                match (&eq_lhs.expr, op, &eq_rhs.expr) {
+                    (Expr_::VarRef(name), EqualityOp::EQ, Expr_::QualifiedAccess { .. }) => {
+                        let access_b = insert_explicit_binders(eq_rhs)?;
                         let var_decl = VarDecl {
                             name: name.clone(),
-                            type_: binder_lhs.type_.clone(),
+                            type_: eq_lhs.type_.clone(),
                         };
-                        let eval_expr = insert_explicit_binders(rhs)?;
+                        let eval_expr = insert_explicit_binders(log_rhs)?;
                         Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
                     }
-                    (Expr_::QualifiedAccess(_, _, _), EqualityOp::EQ, Expr_::VarRef(name)) => {
-                        let access_b = insert_explicit_binders(binder_lhs)?;
+                    (Expr_::QualifiedAccess { .. }, EqualityOp::EQ, Expr_::VarRef(name)) => {
+                        let access_b = insert_explicit_binders(eq_lhs)?;
                         let var_decl = VarDecl {
                             name: name.clone(),
-                            type_: binder_lhs.type_.clone(),
+                            type_: eq_lhs.type_.clone(),
                         };
-                        let eval_expr = insert_explicit_binders(rhs)?;
+                        let eval_expr = insert_explicit_binders(log_rhs)?;
                         Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
                     }
                     _ => Ok(None),
@@ -148,7 +148,11 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
         None => {}
         Some((var_decl, access_b, eval_expr)) => {
             let binder = Expr {
-                expr: Expr_::Bind(var_decl, access_b, eval_expr),
+                expr: Expr_::Bind {
+                    bound_var: var_decl,
+                    relation_expr: access_b,
+                    evaluated_expr: eval_expr
+                },
                 type_: Type::PrimBoolean,
             };
             return Ok(binder);
@@ -156,66 +160,84 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
     }
 
     match &e.expr {
-        Expr_::EqualityComparison(lhs, op, rhs) => {
+        Expr_::EqualityComparison { lhs, op, rhs } => {
             let lhs_b = insert_explicit_binders(lhs)?;
             let rhs_b = insert_explicit_binders(rhs)?;
             let e_b = Expr {
-                expr: Expr_::EqualityComparison(Box::new(lhs_b), *op, Box::new(rhs_b)),
+                expr: Expr_::EqualityComparison {
+                    lhs: Box::new(lhs_b),
+                    op: *op,
+                    rhs: Box::new(rhs_b)
+                },
                 type_: e.type_.clone(),
             };
             Ok(e_b)
         }
-        Expr_::Bind(_, _, _) => {
+        Expr_::Bind { .. } => {
             panic!("The binder rewriter should never have a `Bind` term as input")
         }
         Expr_::ConstantExpr(_) => Ok(e.clone()),
         Expr_::VarRef(_) => Ok(e.clone()),
-        Expr_::RelationalComparison(lhs, op, rhs) => {
+        Expr_::RelationalComparison { lhs, op, rhs } => {
             let lhs_b = insert_explicit_binders(lhs)?;
             let rhs_b = insert_explicit_binders(rhs)?;
             let e_b = Expr {
-                expr: Expr_::RelationalComparison(Box::new(lhs_b), *op, Box::new(rhs_b)),
+                expr: Expr_::RelationalComparison {
+                    lhs: Box::new(lhs_b),
+                    op: *op,
+                    rhs: Box::new(rhs_b),
+                },
                 type_: e.type_.clone(),
             };
             Ok(e_b)
         }
-        Expr_::LogicalConjunction(lhs, rhs) => {
+        Expr_::LogicalConjunction { lhs, rhs } => {
             let lhs_b = insert_explicit_binders(lhs)?;
             let rhs_b = insert_explicit_binders(rhs)?;
             let e_b = Expr {
-                expr: Expr_::LogicalConjunction(Box::new(lhs_b), Box::new(rhs_b)),
+                expr: Expr_::LogicalConjunction {
+                    lhs: Box::new(lhs_b),
+                    rhs: Box::new(rhs_b),
+                },
                 type_: e.type_.clone(),
             };
             Ok(e_b)
         }
-        Expr_::LogicalDisjunction(lhs, rhs) => {
+        Expr_::LogicalDisjunction { lhs, rhs } => {
             let lhs_b = insert_explicit_binders(lhs)?;
             let rhs_b = insert_explicit_binders(rhs)?;
             let e_b = Expr {
-                expr: Expr_::LogicalDisjunction(Box::new(lhs_b), Box::new(rhs_b)),
+                expr: Expr_::LogicalDisjunction {
+                    lhs: Box::new(lhs_b),
+                    rhs: Box::new(rhs_b),
+                },
                 type_: e.type_.clone(),
             };
             Ok(e_b)
         }
-        Expr_::QualifiedAccess(base, name, args) => {
+        Expr_::QualifiedAccess { base, method_name, operands } => {
             let base_b = insert_explicit_binders(base)?;
             let mut args_b = Vec::new();
-            for arg in args.iter() {
+            for arg in operands.iter() {
                 let arg_b = insert_explicit_binders(arg)?;
                 args_b.push(arg_b);
             }
 
             let e_b = Expr {
-                expr: Expr_::QualifiedAccess(Box::new(base_b), name.clone(), args_b),
+                expr: Expr_::QualifiedAccess {
+                    base: Box::new(base_b),
+                    method_name: method_name.clone(),
+                    operands: args_b,
+                },
                 type_: e.type_.clone(),
             };
 
             Ok(e_b)
         }
-        Expr_::Aggregate(op, args) => {
+        Expr_::Aggregate { op, operands } => {
             let mut args_b = Vec::new();
 
-            for arg in args.iter() {
+            for arg in operands.iter() {
                 let arg_b = insert_explicit_binders(&arg.expr)?;
                 let as_arg_b = AsExpr {
                     expr: arg_b,
@@ -225,7 +247,7 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
             }
 
             let e_b = Expr {
-                expr: Expr_::Aggregate(*op, args_b),
+                expr: Expr_::Aggregate { op: *op, operands: args_b },
                 type_: e.type_.clone(),
             };
             Ok(e_b)
@@ -268,7 +290,11 @@ fn rewrites_simple_binders() {
         type_: Type::Method,
     };
     let bound_val = Expr {
-        expr: Expr_::QualifiedAccess(Box::new(method_ref), "getAParameter".into(), Vec::new()),
+        expr: Expr_::QualifiedAccess {
+            base: Box::new(method_ref),
+            method_name: "getAParameter".into(),
+            operands: Vec::new()
+        },
         type_: Type::Relational(Box::new(Type::Parameter)),
     };
     let param_ref = Expr {
@@ -276,7 +302,7 @@ fn rewrites_simple_binders() {
         type_: Type::Parameter,
     };
     let get_name_expr = Expr {
-        expr: Expr_::QualifiedAccess(Box::new(param_ref), "getName".into(), Vec::new()),
+        expr: Expr_::QualifiedAccess { base: Box::new(param_ref), method_name: "getName".into(), operands: Vec::new() },
         type_: Type::PrimString,
     };
     let log_string_expr = Expr {
@@ -284,15 +310,19 @@ fn rewrites_simple_binders() {
         type_: Type::PrimString,
     };
     let eval_expr = Expr {
-        expr: Expr_::EqualityComparison(
-            Box::new(get_name_expr),
-            EqualityOp::EQ,
-            Box::new(log_string_expr),
-        ),
+        expr: Expr_::EqualityComparison {
+            lhs: Box::new(get_name_expr),
+            op: EqualityOp::EQ,
+            rhs: Box::new(log_string_expr),
+        },
         type_: Type::PrimBoolean,
     };
     let expected_where = Expr {
-        expr: Expr_::Bind(var_decl, Box::new(bound_val), Box::new(eval_expr)),
+        expr: Expr_::Bind {
+            bound_var: var_decl,
+            relation_expr: Box::new(bound_val),
+            evaluated_expr: Box::new(eval_expr)
+        },
         type_: Type::PrimBoolean,
     };
     assert!(
