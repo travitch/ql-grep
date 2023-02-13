@@ -109,6 +109,30 @@ fn callable_has_parse_error<'a>(
     }
 }
 
+/// Gets the return type of the callable
+///
+/// Implements:
+/// - [ref:library:Callable:getType]
+/// - [ref:library:Function:getType]
+/// - [ref:library:Method:getType]
+fn callable_get_return_type<'a>(
+    ti: Rc<dyn TreeInterface>,
+    base: &'a NodeFilter,
+    operands: &'a Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::CallableComputation(callable_matcher) => {
+            let ty_matcher = ti.callable_return_type(callable_matcher)
+                .ok_or_else(|| PlanError::NotSupported("get-return-type".into(), "callable".into()))?;
+            Ok(NodeFilter::TypeComputation(ty_matcher))
+        },
+        _ => {
+            panic!("Implementation error: only callables should be possible here");
+        }
+    }
+}
+
 /// Match a string against a regular expression
 ///
 /// Implements:
@@ -351,6 +375,19 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     impls.insert(
         (Type::Callable, "hasParseError".into()),
         Handler(Arc::new(callable_has_parse_error)),
+    );
+
+    impls.insert(
+        (Type::Method, "getType".into()),
+        Handler(Arc::new(callable_get_return_type)),
+    );
+    impls.insert(
+        (Type::Function, "getType".into()),
+        Handler(Arc::new(callable_get_return_type)),
+    );
+    impls.insert(
+        (Type::Callable, "getType".into()),
+        Handler(Arc::new(callable_get_return_type)),
     );
 
     impls.insert(

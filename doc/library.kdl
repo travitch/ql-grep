@@ -19,7 +19,8 @@ type "Function" {
     method "getParameter" type="Parameter" status="Unimplemented" {
         parameter "index" type="int"
     }
-    method "getType" type="Type" status="Unimplemented" tag="[tag:library:function:getType]"
+    method "getType" type="Type" tag="[tag:library:Function:getType]" \
+        docstring=r"Get the return type of the method"
     method "getName" type="string" tag="[tag:library:Function:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"
@@ -35,7 +36,8 @@ type "Method" {
     method "getParameter" type="Parameter" status="Unimplemented" {
         parameter "index" type="int"
     }
-    method "getType" type="Type" status="Unimplemented"
+    method "getType" type="Type" tag="[tag:library:Method:getType]" \
+        docstring=r"Get the return type of the method"
     method "getName" type="string" tag="[tag:library:Method:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"
@@ -51,7 +53,8 @@ type "Callable" {
     method "getParameter" type="Parameter" status="Unimplemented" {
         parameter "index" type="int"
     }
-    method "getType" type="Type" status="Unimplemented"
+    method "getType" type="Type" tag="[tag:library:Callable:getType]" \
+        docstring=r"Get the return type of the callable"
     method "getName" type="string" tag="[tag:library:Callable:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"

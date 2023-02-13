@@ -69,6 +69,42 @@ impl TreeInterface for CPPTreeInterface {
         Some(matcher)
     }
 
+    fn callable_return_type(&self, node: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<LanguageType>> {
+        let get_callable_ref = Rc::clone(&node.extract);
+        let matcher = NodeMatcher {
+            extract: Rc::new(move |ctx, source| {
+                let callable_ref = get_callable_ref(ctx, source);
+                let node = ctx.lookup_callable(&callable_ref);
+                let mut cur = tree_sitter::QueryCursor::new();
+                let ql_query = "(function_definition (type_qualifier)? @qual type: (_) @ty declarator: (_)? @decl)";
+                let query = tree_sitter::Query::new(node.language(), ql_query)
+                    .unwrap_or_else(|e| panic!("Error while querying return type {e:?}"));
+                let mut qms = cur.matches(&query, *node, source);
+                // There should be exactly one match with three capture indices
+                // (the declarator and qualifier could be empty)
+                let m = qms.next().unwrap();
+
+                for _qual in m.nodes_for_capture_index(0) {
+                    // FIXME: Collect these
+                }
+
+                let mut ty_node = None;
+                for ty in m.nodes_for_capture_index(1) {
+                    ty_node = Some(ty);
+                }
+
+                let mut decl_node = None;
+                for decl in m.nodes_for_capture_index(2) {
+                    decl_node = Some(decl);
+                }
+
+                let parsed_decl = decl_node.as_ref().map(|d| parse_declarator(d, source));
+                parse_type_node(&parsed_decl, &ty_node.unwrap(), source)
+            }),
+        };
+        Some(matcher)
+    }
+
     fn callable_has_parse_error(&self, base: &NodeMatcher<CallableRef>) -> NodeMatcher<bool> {
         let get_callable_ref = Rc::clone(&base.extract);
         NodeMatcher {

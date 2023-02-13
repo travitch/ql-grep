@@ -1,0 +1,9 @@
+# Check that getting the return type of a callable works
+
+query = """
+from Callable c
+where c.getType().getName() = "int"
+select c
+"""
+codebase = "feature/0008-return-type-access"
+num_matches = 2
