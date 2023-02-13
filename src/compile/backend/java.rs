@@ -69,6 +69,24 @@ impl TreeInterface for JavaTreeInterface {
         Some(matcher)
     }
 
+    fn callable_return_type(&self, node: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<LanguageType>> {
+        let get_callable_ref = Rc::clone(&node.extract);
+        let matcher = NodeMatcher {
+            extract: Rc::new(move |ctx, source| {
+                let callable_ref = get_callable_ref(ctx, source);
+                let node = ctx.lookup_callable(&callable_ref);
+                let mut cur = tree_sitter::QueryCursor::new();
+                let ql_query = "(method_declaration type: (_) @ty)";
+                let query = tree_sitter::Query::new(node.language(), ql_query)
+                    .unwrap_or_else(|e| panic!("Error while querying for return types {e:?}"));
+                let mut qms = cur.matches(&query, *node, source);
+                let m = qms.next().unwrap();
+                parse_type_node(&m.captures[0].node, source)
+            }),
+        };
+        Some(matcher)
+    }
+
     fn callable_has_parse_error(&self, base: &NodeMatcher<CallableRef>) -> NodeMatcher<bool> {
         let get_callable_ref = Rc::clone(&base.extract);
         NodeMatcher {

@@ -194,4 +194,7 @@ pub trait TreeInterface {
     /// Returns True if the given callable contains a parse error (according to
     /// tree-sitter)
     fn callable_has_parse_error(&self, node: &NodeMatcher<CallableRef>) -> NodeMatcher<bool>;
+
+    /// Returns the return type of the callable
+    fn callable_return_type(&self, node: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<LanguageType>>;
 }
