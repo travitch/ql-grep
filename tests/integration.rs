@@ -90,7 +90,7 @@ fn execute_query(toml_file_path: &str) {
     root_dir.push(test_case.codebase);
 
     let parsed_query = parse_query(test_case.query).unwrap();
-    let typed_query = typecheck_query(parsed_query).unwrap();
+    let typed_query = typecheck_query(&parsed_query).unwrap();
 
     let (send, recv) = bounded::<QueryResults>(4096);
 

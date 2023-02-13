@@ -19,4 +19,6 @@ pub struct Cli {
     pub log_file: Option<PathBuf>,
     #[arg(long, help = "The number of threads to use (default: all)")]
     pub num_threads: Option<usize>,
+    #[arg(long, help = "Print internal representations of the query as it is transformed and then exit")]
+    pub print_query_ir: bool,
 }

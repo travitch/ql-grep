@@ -1,3 +1,7 @@
+use pretty::RcDoc;
+use std::fmt;
+use std::fmt::Display;
+
 use crate::query::val_type::Type;
 
 /// Abstract the representation of expressions so that the same core IR can be
@@ -45,14 +49,6 @@ pub enum Constant {
     String_(String),
     Regex(CachedRegex),
 }
-
-impl PartialEq for CachedRegex {
-    fn eq(&self, other: &CachedRegex) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for CachedRegex {}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct VarDecl {
@@ -164,4 +160,172 @@ pub struct Select<R: Repr> {
     pub where_formula: Expr<R>,
     /// A possibly empty list of variable declarations
     pub var_decls: Vec<VarDecl>,
+}
+
+impl PartialEq for CachedRegex {
+    fn eq(&self, other: &CachedRegex) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for CachedRegex {}
+
+impl Display for Constant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Constant::Boolean(b) => write!(f, "{b}"),
+            Constant::Integer(i) => write!(f, "{i}"),
+            Constant::String_(s) => write!(f, "\"{s}\""),
+            Constant::Regex(cr) => {
+                let s = &cr.0;
+                write!(f, "/{s}/")
+            },
+        }
+    }
+}
+
+impl Display for CompOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CompOp::LT => write!(f, "<"),
+            CompOp::LE => write!(f, "<="),
+            CompOp::GT => write!(f, ">"),
+            CompOp::GE => write!(f, ">="),
+        }
+    }
+}
+
+impl Display for EqualityOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EqualityOp::EQ => write!(f, "="),
+            EqualityOp::NE => write!(f, "!="),
+        }
+    }
+}
+
+impl Display for AggregateOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AggregateOp::Count => write!(f, "count"),
+        }
+    }
+}
+
+impl Display for Untyped {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "")
+    }
+}
+
+impl<R: Repr> Expr_<R>
+where
+  <R as Repr>::Type: Display
+{
+    pub fn to_doc(&self) -> RcDoc<()> {
+        match self {
+            Expr_::ConstantExpr(c) => RcDoc::as_string(c),
+            Expr_::VarRef(s) => parens(RcDoc::text("var-ref ")
+                .append(RcDoc::text(s))),
+            Expr_::Bind { bound_var, relation_expr, evaluated_expr } => RcDoc::text("(bind")
+                .append(RcDoc::hardline())
+                .append(RcDoc::text("(= ")
+                    .append(RcDoc::as_string(&bound_var.name))
+                    .append(RcDoc::space())
+                    .append(relation_expr.to_doc())
+                    .append(RcDoc::text(")"))
+                    .append(RcDoc::hardline())
+                    .append(evaluated_expr.to_doc())
+                    .append(RcDoc::hardline())
+                    .nest(2))
+                .append(RcDoc::text(")")),
+            Expr_::RelationalComparison { lhs, op, rhs } => parens(RcDoc::as_string(op)
+                .append(RcDoc::space())
+                .append(lhs.to_doc())
+                .append(RcDoc::space())
+                .append(rhs.to_doc())
+                .append(RcDoc::text(")"))),
+            Expr_::EqualityComparison { lhs, op, rhs } => parens(RcDoc::as_string(op)
+                .append(RcDoc::space())
+                .append(lhs.to_doc())
+                .append(RcDoc::space())
+                .append(rhs.to_doc())
+                .append(RcDoc::text(")"))),
+            Expr_::LogicalConjunction { lhs, rhs } => parens(RcDoc::text("and")
+                .append(RcDoc::hardline())
+                .append(lhs.to_doc()
+                    .append(RcDoc::hardline())
+                    .append(rhs.to_doc())
+                    .nest(2))),
+            Expr_::LogicalDisjunction { lhs, rhs } => parens(RcDoc::text("or")
+                .append(RcDoc::hardline())
+                .append(lhs.to_doc()
+                    .append(RcDoc::hardline())
+                    .append(rhs.to_doc())
+                    .nest(2))),
+            Expr_::QualifiedAccess { base, method_name, operands } => base.to_doc()
+                .append(RcDoc::text("."))
+                .append(RcDoc::as_string(method_name))
+                .append(RcDoc::text("("))
+                .append(RcDoc::intersperse(operands.iter().map(|o| o.to_doc()), RcDoc::text(",")))
+                .append(RcDoc::text(")")),
+            Expr_::Aggregate { op, operands } => parens(RcDoc::as_string(op)
+                .append(RcDoc::intersperse(operands.iter().map(|o| o.expr.to_doc()), RcDoc::text(",")))
+                .append(RcDoc::text(")"))),
+        }
+    }
+}
+
+impl<R: Repr> Expr<R>
+where
+  <R as Repr>::Type: Display
+{
+    pub fn to_doc(&self) -> RcDoc<()> {
+        self.expr.to_doc()
+    }
+
+    pub fn to_pretty(&self, width: usize) -> String {
+        let mut w = Vec::new();
+        self.to_doc().render(width, &mut w).unwrap();
+        String::from_utf8(w).unwrap()
+    }
+}
+
+impl<R: Repr> Select<R>
+where
+  <R as Repr>::Type: Display
+{
+    pub fn to_doc(&self) -> RcDoc<()> {
+        let from = RcDoc::text("from ")
+            .append(RcDoc::intersperse(self.var_decls.iter().map(|v| {
+                let doc = RcDoc::as_string(&v.type_)
+                    .append(RcDoc::space())
+                    .append(RcDoc::as_string(&v.name));
+                parens(doc)
+            }), RcDoc::space()));
+        let select = RcDoc::text("select ")
+            .append(RcDoc::intersperse(self.select_exprs.iter().map(|e| {
+                e.expr.to_doc()
+            }), RcDoc::space()));
+        parens(RcDoc::text("query")
+            .append(RcDoc::hardline())
+            .append(parens(from)
+                .append(RcDoc::hardline())
+                .append(self.where_formula.to_doc())
+                .append(RcDoc::hardline())
+                .append(parens(select))
+                .nest(2)))
+    }
+
+    pub fn to_pretty(&self, width: usize) -> String {
+        let mut w = Vec::new();
+        self.to_doc().render(width, &mut w).unwrap();
+        String::from_utf8(w).unwrap()
+    }
+}
+
+fn parens(d: RcDoc<()>) -> RcDoc<()> {
+    RcDoc::text("(")
+        .append(d)
+        .append(RcDoc::text(")"))
 }
