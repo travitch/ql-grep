@@ -7,5 +7,5 @@ from Callable c
 where c.hasParseError()
 select c
 """
-codebase = "feature/has-parse-error"
+codebase = "feature/0004-has-parse-errors"
 num_matches = 2

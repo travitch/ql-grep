@@ -8,5 +8,5 @@ from Method m
 where m.hasParseError()
 select m
 """
-codebase = "feature/has-parse-error"
+codebase = "feature/0005-has-parse-error-method-only"
 num_matches = 1
