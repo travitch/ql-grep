@@ -430,7 +430,7 @@ fn typecheck_as_expr(env: &mut TypeEnv, as_expr: &AsExpr<Syntax>) -> anyhow::Res
 ///
 /// The return types for methods (which are otherwise not obvious) are
 /// automatically derived from the documentation (see `library.kdl`)
-pub fn typecheck_query(syntax: Select<Syntax>) -> anyhow::Result<Select<Typed>> {
+pub fn typecheck_query(syntax: &Select<Syntax>) -> anyhow::Result<Select<Typed>> {
     // Note that the type environment never really updates because new
     // identifiers are not introduced outside of the declaration clause
     //
@@ -451,7 +451,7 @@ pub fn typecheck_query(syntax: Select<Syntax>) -> anyhow::Result<Select<Typed>> 
     let typed_select = Select {
         select_exprs: typed_selected_exprs,
         where_formula: typed_where,
-        var_decls: syntax.var_decls,
+        var_decls: syntax.var_decls.clone(),
     };
     Ok(typed_select)
 }

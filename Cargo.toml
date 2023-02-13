@@ -14,6 +14,7 @@ lazy_static = "^1.4"
 miette = { version = "^4.3", features=["fancy"] }
 num_cpus = "^1"
 once_cell = "^1.16"
+pretty = "^0.11"
 regex = "^1"
 tracing = "^0.1"
 tracing-subscriber = { version = "^0.3", features = ["env-filter"]}

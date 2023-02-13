@@ -5,6 +5,7 @@
 /// evaluation strategy. In particular, it collects joins into a natural order
 /// that can be efficiently evaluated. The order is determined by the type
 /// containment relationships defined in the library.
+use pretty::RcDoc;
 use std::collections::HashSet;
 
 use crate::library::index::library_index;
@@ -272,12 +273,52 @@ pub fn plan_query(query: &Select<Typed>) -> anyhow::Result<QueryPlan> {
     Ok(qp)
 }
 
+impl QueryPlan {
+    pub fn to_doc(&self) -> RcDoc<()> {
+        let from = RcDoc::text("from ")
+            .append(RcDoc::intersperse(self.var_decls.iter().map(|v| {
+                let doc = RcDoc::as_string(&v.type_)
+                    .append(RcDoc::space())
+                    .append(RcDoc::as_string(&v.name));
+                parens(doc)
+            }), RcDoc::space()));
+        let select = RcDoc::text("select ")
+            .append(RcDoc::intersperse(self.selected_exprs.iter().map(|e| {
+                e.expr.to_doc()
+            }), RcDoc::space()));
+        let root = RcDoc::text("root ")
+            .append(RcDoc::as_string(&self.root_var.name));
+        parens(RcDoc::text("query")
+            .append(RcDoc::hardline())
+            .append(parens(from)
+                .append(RcDoc::hardline())
+                .append(self.where_formula.to_doc())
+                .append(RcDoc::hardline())
+                .append(parens(select))
+                .append(RcDoc::hardline())
+                .append(parens(root))
+                .nest(2)))
+    }
+
+    pub fn to_pretty(&self, width: usize) -> String {
+        let mut w = Vec::new();
+        self.to_doc().render(width, &mut w).unwrap();
+        String::from_utf8(w).unwrap()
+    }
+}
+
+fn parens(d: RcDoc<()>) -> RcDoc<()> {
+    RcDoc::text("(")
+        .append(d)
+        .append(RcDoc::text(")"))
+}
+
 #[test]
 fn rewrites_simple_binders() {
     let ql =
         "from Method m, Parameter p where p = m.getAParameter() and p.getName() = \"log\" select p";
     let parsed_query = parse_query(ql).unwrap();
-    let typed_select = typecheck_query(parsed_query).unwrap();
+    let typed_select = typecheck_query(&parsed_query).unwrap();
     let plan = plan_query(&typed_select).unwrap();
     // We only really need to check the where clause
     assert!(plan.var_decls.len() == 2);
