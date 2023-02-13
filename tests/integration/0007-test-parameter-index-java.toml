@@ -5,5 +5,5 @@ from Method m, Parameter p
 where p = m.getAParameter() and (p.getType().getName() = "int" and p.getIndex() = 0)
 select m
 """
-codebase = "feature/parameter-index"
+codebase = "feature/0007-test-parameter-index-java"
 num_matches = 1

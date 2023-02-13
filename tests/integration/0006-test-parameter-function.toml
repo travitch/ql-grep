@@ -5,5 +5,5 @@ from Function f, Parameter p
 where p = f.getAParameter() and (p.getType().getName() = "int" and p.getIndex() = 0)
 select f
 """
-codebase = "feature/parameter-index"
+codebase = "feature/0006-test-parameter-function"
 num_matches = 1
