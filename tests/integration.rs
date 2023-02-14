@@ -2,12 +2,13 @@
 use crossbeam_channel::{bounded, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 use serde::Deserialize;
+use std::rc::Rc;
 use std::thread;
 use test_generator::test_resources;
 use toml::de;
 
 use ql_grep::{
-    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryResult, Select,
+    compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query, QueryResult, Select,
     SourceFile, Typed,
 };
 
@@ -53,14 +54,15 @@ fn visit_file(
             {
                 let mut cursor = tree_sitter::QueryCursor::new();
                 let query_plan = plan_query(query).unwrap();
+                let tree_interface = make_tree_interface(sf.lang);
                 // If a query fails to compile for one source language, that is
                 // potentially okay - it might just mean that a feature in the
                 // query is not supported for all target languages.  The
                 // expected results will let us know if the failure is
                 // unexpected.
-                match compile_query(sf.lang, ast.language(), &query_plan) {
+                match compile_query(sf.lang, ast.language(), Rc::clone(&tree_interface), &query_plan) {
                     Ok(compiled_query) => {
-                        let mut result = evaluate_plan(&sf, &ast, &mut cursor, &compiled_query).unwrap();
+                        let mut result = evaluate_plan(&sf, &ast, Rc::clone(&tree_interface), &mut cursor, &compiled_query).unwrap();
                         res_storage.append(&mut result);
                     },
                     Err(_) => {

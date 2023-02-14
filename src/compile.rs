@@ -1,21 +1,20 @@
-mod backend;
+pub mod backend;
 mod errors;
 pub mod interface;
 mod lift;
 mod method_library;
 pub mod node_filter;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::compile::backend::cpp::CPPTreeInterface;
-use crate::compile::backend::java::JavaTreeInterface;
 use crate::compile::errors::PlanError;
 use crate::compile::interface::{BoundNode, CallableRef, NodeMatcher, ParameterRef, TreeInterface};
 use crate::compile::lift::transform_node_filter;
 use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
 use crate::plan::QueryPlan;
+use crate::preprocess::FilePreprocessingPass;
 use crate::query::ir::{AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Typed, VarDecl};
 use crate::query::val_type::Type;
 use crate::source_file::Language;
@@ -34,6 +33,7 @@ pub enum QueryAction {
 
 /// A query plan that can be evaluated to produce a (stream of) results
 pub struct CompiledQuery {
+    pub file_preprocessing: HashSet<FilePreprocessingPass>,
     pub steps: QueryAction,
 }
 
@@ -50,18 +50,6 @@ impl Context {
         }
 
         Context { symbol_table: t }
-    }
-}
-
-/// Examine the given source file and determine which tree-sitter adapter to use
-/// while processing it.
-///
-/// [tag:tree_sitter_interface_dispatcher]
-fn make_tree_interface(lang: Language) -> Rc<dyn TreeInterface> {
-    match lang {
-        Language::Cpp => Rc::new(CPPTreeInterface::new()) as Rc<dyn TreeInterface>,
-        Language::Java => Rc::new(JavaTreeInterface::new()) as Rc<dyn TreeInterface>,
-        Language::Python => unimplemented!(),
     }
 }
 
@@ -461,6 +449,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
 pub fn compile_query<'a>(
     lang: Language,
     ts_lang: tree_sitter::Language,
+    tree_interface: Rc<dyn TreeInterface>,
     query_plan: &'a QueryPlan,
 ) -> anyhow::Result<CompiledQuery> {
     // The basic idea is that we want to do as much processing as we can inside
@@ -485,12 +474,12 @@ pub fn compile_query<'a>(
         return Err(anyhow::anyhow!(PlanError::NonSingletonSelect(num_selected)));
     }
 
-    let tree_interface: Rc<dyn TreeInterface> = make_tree_interface(lang);
     let ctx = Context::new(&query_plan.var_decls);
 
     match &query_plan.selected_exprs[0].expr.expr {
         Expr_::ConstantExpr(v) => {
             let p = CompiledQuery {
+                file_preprocessing: HashSet::new(),
                 steps: QueryAction::ConstantValue(v.clone()),
             };
             Ok(p)
@@ -510,6 +499,7 @@ pub fn compile_query<'a>(
             let flt = compile_expr(tree_interface, &query_plan.where_formula)?;
             let bound_node = BoundNode::new(var, ty);
             let p = CompiledQuery {
+                file_preprocessing: query_plan.file_preprocessing.clone(),
                 steps: QueryAction::TSQuery(flt, ts_query, bound_node),
             };
             Ok(p)

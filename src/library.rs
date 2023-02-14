@@ -99,6 +99,8 @@ fn drop_aggregate_types(ty: val_type::Type) -> val_type::Type {
         val_type::Type::Regex => ty,
         val_type::Type::Expr => ty,
         val_type::Type::Call => ty,
+        val_type::Type::Import => ty,
+        val_type::Type::File => ty,
         val_type::Type::Parameter => ty,
         val_type::Type::PrimString => ty,
         val_type::Type::PrimInteger => ty,

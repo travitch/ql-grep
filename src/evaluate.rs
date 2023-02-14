@@ -1,6 +1,10 @@
-use crate::compile::interface::EvaluationContext;
+use std::collections::HashSet;
+use std::rc::Rc;
+
+use crate::compile::interface::{EvaluationContext, TreeInterface};
 use crate::compile::node_filter::NodeFilter;
 use crate::compile::{CompiledQuery, QueryAction};
+use crate::preprocess::FilePreprocessingPass;
 use crate::query::ir::Constant;
 use crate::source_file;
 
@@ -75,16 +79,30 @@ fn evaluate_filter<'a, 'b: 'a>(
     }
 }
 
+fn preprocess_file<'a>(
+    passes: &HashSet<FilePreprocessingPass>,
+    ast: &'a tree_sitter::Tree,
+    source: &'a [u8],
+    tree_interface: Rc<dyn TreeInterface>,
+    eval_ctx: &mut EvaluationContext<'a>,
+) {
+    if passes.contains(&FilePreprocessingPass::Imports) {
+        eval_ctx.attach_file_import_index(tree_interface.file_imports(&ast.root_node(), source));
+    }
+}
+
 // FIXME: During evaluation, flush any nodes that don't satisfy their predicate from the evaluation context
 
 pub fn evaluate_plan<'a>(
     target: &'a source_file::SourceFile,
     ast: &'a tree_sitter::Tree,
+    tree_interface: Rc<dyn TreeInterface>,
     cursor: &'a mut tree_sitter::QueryCursor,
     plan: &'a CompiledQuery,
 ) -> anyhow::Result<Vec<QueryResult>> {
     // FIXME: Add rich error reporting here, with supportive logging in the main driver that consumes these results
     let mut eval_ctx = EvaluationContext::new();
+    preprocess_file(&plan.file_preprocessing, ast, target.source.as_bytes(), tree_interface, &mut eval_ctx);
     let mut matches = Vec::new();
     match &plan.steps {
         QueryAction::ConstantValue(v) => {

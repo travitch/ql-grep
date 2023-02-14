@@ -17,10 +17,12 @@ where
         string("boolean").map(|_| Type::PrimBoolean),
         string("string").map(|_| Type::PrimString),
         string("Expr").map(|_| Type::Expr),
-        string("Function").map(|_| Type::Function),
         string("Method").map(|_| Type::Method),
         string("Parameter").map(|_| Type::Parameter),
         string("Type").map(|_| Type::Type),
+        string("Import").map(|_| Type::Import),
+        attempt(string("Function").map(|_| Type::Function)),
+        attempt(string("File").map(|_| Type::File)),
         attempt(string("Class").map(|_| Type::Class)),
         attempt(string("Callable").map(|_| Type::Callable)),
         attempt(string("Call").map(|_| Type::Call)),
@@ -83,6 +85,8 @@ pub enum Type {
     Call,
     Expr,
     Field,
+    Import,
+    File,
     /// Values that appear in a relational context (and might be evaluated as a list or as a logic expression)
     Relational(Box<Type>),
     /// A list of values
@@ -120,6 +124,8 @@ impl fmt::Display for Type {
             Type::Class => write!(f, "Class"),
             Type::Call => write!(f, "Call"),
             Type::Expr => write!(f, "Expr"),
+            Type::Import => write!(f, "Import"),
+            Type::File => write!(f, "File"),
             Type::Regex => write!(f, "Regex"),
             Type::List(ty) => {
                 write!(f, "List<")?;
@@ -148,6 +154,8 @@ impl Type {
             Type::Regex => false,
             Type::Call => false,
             Type::Expr => false,
+            Type::File => false,
+            Type::Import => false,
             Type::PrimString => false,
             Type::PrimInteger => false,
             Type::PrimBoolean => false,
@@ -176,6 +184,8 @@ impl Type {
             | Type::Parameter
             | Type::Call
             | Type::Expr
+            | Type::Import
+            | Type::File
             | Type::Field => self.clone(),
         }
     }
