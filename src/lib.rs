@@ -2,10 +2,13 @@ mod compile;
 mod evaluate;
 mod library;
 mod plan;
+mod preprocess;
 mod query;
 mod source_file;
 
+pub use crate::compile::backend::make_tree_interface;
 pub use crate::compile::compile_query;
+pub use crate::compile::interface::TreeInterface;
 pub use crate::evaluate::{evaluate_plan, QueryResult};
 pub use crate::library::LIBRARY_DATA;
 pub use crate::plan::{plan_query, QueryPlan};

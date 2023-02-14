@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use tree_sitter::Node;
 
+use crate::preprocess::FileImportIndex;
 use crate::query::val_type::Type;
 
 pub struct TopLevelMatcher {
@@ -74,7 +75,15 @@ pub struct EvaluationContext<'a> {
     /// All of the nodes corresponding to the Callable currently under
     /// evaluation
     callables: HashMap<CallableRef, Node<'a>>,
+    /// All of the parsed parameters for the given function
     parameters: HashMap<ParameterRef, FormalArgument>,
+    /// The index of the imports in the current file
+    ///
+    /// This is an `Option` to distinguish the case of "did not run the
+    /// analysis" from "the file has no imports".  This enables us to panic if
+    /// we needed to run the analysis but did not and detect those
+    /// implementation errors.
+    file_imports: Option<FileImportIndex>,
 }
 
 impl<'a> EvaluationContext<'a> {
@@ -82,7 +91,12 @@ impl<'a> EvaluationContext<'a> {
         EvaluationContext {
             callables: HashMap::new(),
             parameters: HashMap::new(),
+            file_imports: None,
         }
+    }
+
+    pub fn attach_file_import_index(&mut self, file_imports: FileImportIndex) {
+        self.file_imports = Some(file_imports);
     }
 
     /// Retrieve the node for a `CallableRef`
@@ -177,6 +191,12 @@ pub trait TreeInterface {
     /// This can fail if the given type is not supported for the language
     /// implementing this interface.
     fn top_level_type(&self, t: &Type) -> Option<TopLevelMatcher>;
+
+    /// Parse all of the imports in the file and return an index of them.
+    ///
+    /// Note that this is meant to be used pre-evaluation, rather than during
+    /// compilation.
+    fn file_imports<'a>(&self, root: &Node, source: &'a [u8]) -> FileImportIndex;
 
     /// A node matcher that extracts formal arguments from a callable node
     /// (e.g., a method or function)

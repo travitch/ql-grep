@@ -1,7 +1,9 @@
 use std::rc::Rc;
+use tracing::error;
 use tree_sitter::Node;
 
 use crate::compile::interface::*;
+use crate::preprocess::{FileImportIndex, Import};
 use crate::query::val_type::Type;
 
 pub struct JavaTreeInterface {}
@@ -27,6 +29,26 @@ impl TreeInterface for JavaTreeInterface {
             },
             _ => None,
         }
+    }
+
+    fn file_imports<'a>(&self, root: &Node, source: &'a [u8]) -> FileImportIndex {
+        let mut cur = tree_sitter::QueryCursor::new();
+        let ql_query = "(import_declaration (_) @import)";
+        let query = tree_sitter::Query::new(root.language(), ql_query)
+            .unwrap_or_else(|e| panic!("Error while querying for imports in java file {e:?}"));
+        let qms = cur.matches(&query, *root, source);
+
+        let mut import_index = FileImportIndex::new();
+
+        qms.for_each(|qm| {
+            qm.captures[0].node.utf8_text(source)
+                .map_or_else(|_e| error!("Error decoding source as UTF8 for import"), |s| {
+                    let imp = Import::Import(s.into());
+                    import_index.add(imp);
+                });
+        });
+
+        import_index
     }
 
     fn callable_arguments(

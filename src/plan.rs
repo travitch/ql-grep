@@ -9,6 +9,7 @@ use pretty::RcDoc;
 use std::collections::HashSet;
 
 use crate::library::index::library_index;
+use crate::preprocess::FilePreprocessingPass;
 use crate::query::ir::{AsExpr, EqualityOp, Expr, Expr_, Select, Typed, VarDecl};
 use crate::query::val_type::Type;
 
@@ -26,6 +27,7 @@ pub struct QueryPlan {
     pub where_formula: Expr<Typed>,
     pub var_decls: Vec<VarDecl>,
     pub root_var: VarDecl,
+    pub file_preprocessing: HashSet<FilePreprocessingPass>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -268,6 +270,7 @@ pub fn plan_query(query: &Select<Typed>) -> anyhow::Result<QueryPlan> {
         where_formula: rewritten_expr,
         var_decls: query.var_decls.clone(),
         root_var: outermost_var,
+        file_preprocessing: HashSet::new(),
     };
 
     Ok(qp)

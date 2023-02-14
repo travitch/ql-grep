@@ -1,7 +1,9 @@
 use std::rc::Rc;
+use tracing::error;
 use tree_sitter::Node;
 
 use crate::compile::interface::*;
+use crate::preprocess::{FileImportIndex, Import};
 use crate::query::parser::get_child_of_kind;
 use crate::query::val_type::Type;
 
@@ -26,6 +28,35 @@ impl TreeInterface for CPPTreeInterface {
             }
             _ => None,
         }
+    }
+
+    fn file_imports<'a>(&self, root: &Node, source: &'a [u8]) -> FileImportIndex {
+        let mut cur = tree_sitter::QueryCursor::new();
+        let ql_query = "(preproc_include (_) @include)";
+        let query = tree_sitter::Query::new(root.language(), ql_query)
+            .unwrap_or_else(|e| panic!("Error while querying for includes in C/C++ file {e:}"));
+        let qms = cur.matches(&query, *root, source);
+
+        let mut import_index = FileImportIndex::new();
+
+        qms.for_each(|qm| {
+            qm.captures[0].node.utf8_text(source)
+                .map_or_else(|_e| error!("Error decoding source as UTF-8 for include"), |s| {
+                    if s.starts_with("\"") {
+                        let name = s.strip_prefix("\"").unwrap().strip_suffix("\"").unwrap();
+                        let imp = Import::IncludeLocal(name.into());
+                        import_index.add(imp);
+                    } else if s.starts_with("<") {
+                        let name = s.strip_prefix("<").unwrap().strip_suffix(">").unwrap();
+                        let imp = Import::IncludeSystem(name.into());
+                        import_index.add(imp);
+                    } else {
+                        panic!("Unhandled import type `{s}`");
+                    }
+                });
+        });
+
+        import_index
     }
 
     fn callable_arguments(

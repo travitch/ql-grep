@@ -3,14 +3,15 @@ use crossbeam_channel::{bounded, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 use std::fs::File;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Mutex;
 use std::thread;
 use tracing::{error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use ql_grep::{
-    compile_query, evaluate_plan, parse_query, plan_query, typecheck_query, QueryPlan, QueryResult, Select,
-    SourceFile, Syntax, Typed, LIBRARY_DATA,
+    compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query, QueryPlan, QueryResult, Select,
+    SourceFile, Syntax, TreeInterface, Typed, LIBRARY_DATA,
 };
 
 mod cli;
@@ -46,8 +47,9 @@ fn process_query(
     ast: &tree_sitter::Tree,
 ) -> anyhow::Result<Vec<QueryResult>> {
     let mut cursor = tree_sitter::QueryCursor::new();
-    let compiled_query = compile_query(sf.lang, ast.language(), &query_plan)?;
-    let result = evaluate_plan(sf, ast, &mut cursor, &compiled_query)?;
+    let tree_interface: Rc<dyn TreeInterface> = make_tree_interface(sf.lang);
+    let compiled_query = compile_query(sf.lang, ast.language(), Rc::clone(&tree_interface), &query_plan)?;
+    let result = evaluate_plan(sf, ast, Rc::clone(&tree_interface), &mut cursor, &compiled_query)?;
     Ok(result)
 }
 
