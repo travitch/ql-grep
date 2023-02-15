@@ -76,6 +76,15 @@ fn evaluate_filter<'a, 'b: 'a>(
         NodeFilter::TypeListComputation(_c) => {
             panic!("Not evaluating type lists");
         }
+        NodeFilter::ImportComputation(_c) => {
+            panic!("Not evaluating top-level import computations");
+        }
+        NodeFilter::ImportListComputation(_c) => {
+            panic!("Not evaluating top-level import lists");
+        }
+        NodeFilter::FileComputation => {
+            panic!("Not evaluating file computations");
+        }
     }
 }
 

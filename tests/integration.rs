@@ -8,8 +8,8 @@ use test_generator::test_resources;
 use toml::de;
 
 use ql_grep::{
-    compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query, QueryResult, Select,
-    SourceFile, Typed,
+    compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query, QueryResult,
+    SourceFile, TypedQuery,
 };
 
 /// A single test case to run ql-grep over, with expected results
@@ -42,7 +42,7 @@ impl Statistics {
 }
 
 fn visit_file(
-    query: &Select<Typed>,
+    query: &TypedQuery,
     send: Sender<QueryResults>,
     ent: Result<DirEntry, ignore::Error>,
 ) -> WalkState {

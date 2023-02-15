@@ -10,8 +10,9 @@ use std::collections::HashSet;
 
 use crate::library::index::library_index;
 use crate::preprocess::FilePreprocessingPass;
-use crate::query::ir::{AsExpr, EqualityOp, Expr, Expr_, Select, Typed, VarDecl};
+use crate::query::ir::{AsExpr, EqualityOp, Expr, Expr_, Typed, VarDecl};
 use crate::query::val_type::Type;
+use crate::query::typecheck::TypedQuery;
 
 #[cfg(test)]
 use crate::query::ir::Constant;
@@ -260,17 +261,17 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
 
 /// Generate a query plan for the given query that decides the order of
 /// evaluation for each variable and expression
-pub fn plan_query(query: &Select<Typed>) -> anyhow::Result<QueryPlan> {
+pub fn plan_query(typed_query: &TypedQuery) -> anyhow::Result<QueryPlan> {
     // First, order the declared variables by precedence
-    let outermost_var = find_outermost_var_decl(&query.var_decls)?;
-    let rewritten_expr = insert_explicit_binders(&query.where_formula)?;
+    let outermost_var = find_outermost_var_decl(&typed_query.query.var_decls)?;
+    let rewritten_expr = insert_explicit_binders(&typed_query.query.where_formula)?;
 
     let qp = QueryPlan {
-        selected_exprs: query.select_exprs.clone(),
+        selected_exprs: typed_query.query.select_exprs.clone(),
         where_formula: rewritten_expr,
-        var_decls: query.var_decls.clone(),
+        var_decls: typed_query.query.var_decls.clone(),
         root_var: outermost_var,
-        file_preprocessing: HashSet::new(),
+        file_preprocessing: typed_query.needed_file_preprocessing_passes.clone(),
     };
 
     Ok(qp)

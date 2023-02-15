@@ -11,6 +11,20 @@
 //   - boolean
 //   - string
 
+type "File" {
+    contains "Function"
+    contains "Method"
+    contains "Callable"
+    contains "Import"
+    method "getAnImport" type="Relational<Import>" tag="[tag:library:File:getAnImport]" requires="Imports" \
+        docstring=r"Get an import or include directive in this `File`"
+}
+
+type "Import" {
+    method "getName" type="string" tag="[tag:library:Import:getName]" \
+        docstring=r"Get the name of the imported entity; this is a filename for an import or a (possibly qualified) module name"
+}
+
 type "Function" {
     contains "Parameter"
     contains "Call"
@@ -20,12 +34,14 @@ type "Function" {
         parameter "index" type="int"
     }
     method "getType" type="Type" tag="[tag:library:Function:getType]" \
-        docstring=r"Get the return type of the method"
+        docstring=r"Get the return type of the `Function`"
     method "getName" type="string" tag="[tag:library:Function:getName]"
     method "getACall" type="Relational<Call>" status="Unimplemented" \
         docstring=r"Return a call expression in the body of this object"
     method "hasParseError" type="boolean" tag="[tag:library:Function:hasParseError]" \
         docstring=r"Returns True if the function contains a parse error"
+    method "getFile" type="File" tag="[tag:library:Function:getFile]" \
+        docstring=r"Returns the `File` containing this `Function`"
 }
 
 type "Method" {
@@ -43,6 +59,8 @@ type "Method" {
         docstring=r"Return a call expression in the body of this object"
     method "hasParseError" type="boolean" tag="[tag:library:Method:hasParseError]" \
         docstring=r"Returns True if the method contains a parse error"
+    method "getFile" type="File" tag="[tag:library:Method:getFile]" \
+        docstring=r"Returns the `File` containing this `Method`"
 }
 
 type "Callable" {
@@ -60,6 +78,8 @@ type "Callable" {
         docstring=r"Return a call expression in the body of this object"
     method "hasParseError" type="boolean" tag="[tag:library:Callable:hasParseError]" \
         docstring=r"Returns True if the callable contains a parse error"
+    method "getFile" type="File" tag="[tag:library:Callable:getFile]" \
+        docstring=r"Returns the `File` containing this `Callable`"
 }
 
 // Parameters are *formal* parameters of function definitions/declarations

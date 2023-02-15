@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use crate::library;
+use crate::preprocess::FilePreprocessingPass;
 use crate::query::val_type::Type;
 
 pub struct MethodSignature(
@@ -10,6 +11,7 @@ pub struct MethodSignature(
     pub Vec<Type>,
     pub Type,
     pub Option<library::Status>,
+    pub Option<FilePreprocessingPass>,
 );
 pub struct TypeIndex {
     pub method_index: HashMap<String, MethodSignature>,
@@ -27,6 +29,7 @@ fn build_method_signature(method: &library::Method) -> MethodSignature {
         param_types,
         method.type_.clone(),
         method.status,
+        method.requires,
     )
 }
 
