@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use tree_sitter::Node;
 
-use crate::preprocess::FileImportIndex;
+use crate::preprocess::{FileImportIndex, Import};
 use crate::query::val_type::Type;
 
 pub struct TopLevelMatcher {
@@ -130,6 +130,12 @@ impl<'a> EvaluationContext<'a> {
     pub fn flush_bindings(&mut self) {
         self.callables.clear();
         self.parameters.clear();
+    }
+
+    pub fn imports(&self) -> &[Import] {
+        let idx = self.file_imports.as_ref()
+            .unwrap_or_else(|| panic!("The query plan required a computed FileImportIndex, but it was not available"));
+        idx.imports()
     }
 }
 

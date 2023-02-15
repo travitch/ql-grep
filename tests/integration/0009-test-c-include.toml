@@ -1,0 +1,9 @@
+# Test that queries against indexed file-level includes work for C
+
+query = """
+from Function f
+where f.getFile().getAnImport().getName() = "setjmp.h"
+select f
+"""
+codebase = "feature/0009-test-c-include"
+num_matches = 1

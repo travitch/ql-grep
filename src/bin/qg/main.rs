@@ -11,7 +11,7 @@ use tracing_subscriber::FmtSubscriber;
 
 use ql_grep::{
     compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query, QueryPlan, QueryResult, Select,
-    SourceFile, Syntax, TreeInterface, Typed, LIBRARY_DATA,
+    SourceFile, Syntax, TreeInterface, TypedQuery, LIBRARY_DATA,
 };
 
 mod cli;
@@ -171,12 +171,12 @@ fn initialize_logging(log_file_path: &Option<PathBuf>) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn print_query_ir(query: &Select<Syntax>, typed_query: &Select<Typed>, query_plan: &QueryPlan) {
+fn print_query_ir(query: &Select<Syntax>, typed_query: &TypedQuery, query_plan: &QueryPlan) {
     println!("# Parsed Query");
     println!("{}", query.to_pretty(100));
 
     println!("\n# Typechecked Query");
-    println!("{}", typed_query.to_pretty(100));
+    println!("{}", typed_query.query.to_pretty(100));
 
     println!("\n# Query Plan");
     println!("{}", query_plan.to_pretty(100));
@@ -201,11 +201,11 @@ fn main() -> anyhow::Result<()> {
     let root_dir = args.root.unwrap_or(cwd);
 
     let query = make_query(&args.query_string, &args.query_path)?;
-    let typed_select = typecheck_query(&query)?;
-    let query_plan = plan_query(&typed_select)?;
+    let typed_query = typecheck_query(&query)?;
+    let query_plan = plan_query(&typed_query)?;
 
     if args.print_query_ir {
-        print_query_ir(&query, &typed_select, &query_plan);
+        print_query_ir(&query, &typed_query, &query_plan);
         std::process::exit(0);
     }
 

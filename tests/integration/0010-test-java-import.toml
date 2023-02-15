@@ -1,0 +1,10 @@
+# Test that queries against indexed file-level imports work for Java
+
+query = """
+from Method m
+where m.getFile().getAnImport().getName() = "java.util.Map"
+select m
+"""
+
+codebase = "feature/0010-test-java-import"
+num_matches = 2

@@ -144,6 +144,22 @@ where
                 }
             }
         }
+        NodeFilter::ImportListComputation(import_list_matcher) => {
+            match result_type.base_if_relational() {
+                Type::PrimString => {
+                    let matcher = transform_body(
+                        import_list_matcher,
+                        NodeFilter::ImportComputation,
+                        as_string,
+                        xfrm,
+                    );
+                    Some(NodeFilter::StringListComputation(matcher))
+                }
+                _ => {
+                    panic!("Unsupported conversion from `Import` to `{result_type}`");
+                }
+            }
+        }
         _ => None,
     }
 }

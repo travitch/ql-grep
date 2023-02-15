@@ -15,6 +15,20 @@ impl CPPTreeInterface {
     }
 }
 
+fn parse_include_string(s: &str) -> Option<Import> {
+    if s.starts_with("\"") {
+        let name = s.strip_prefix("\"").unwrap().strip_suffix("\"").unwrap();
+        let imp = Import::IncludeLocal(name.into());
+        Some(imp)
+    } else if s.starts_with("<") {
+        let name = s.strip_prefix("<").unwrap().strip_suffix(">").unwrap();
+        let imp = Import::IncludeSystem(name.into());
+        Some(imp)
+    } else {
+        None
+    }
+}
+
 impl TreeInterface for CPPTreeInterface {
     fn top_level_type(&self, t: &Type) -> Option<TopLevelMatcher> {
         match t {
@@ -42,17 +56,7 @@ impl TreeInterface for CPPTreeInterface {
         qms.for_each(|qm| {
             qm.captures[0].node.utf8_text(source)
                 .map_or_else(|_e| error!("Error decoding source as UTF-8 for include"), |s| {
-                    if s.starts_with("\"") {
-                        let name = s.strip_prefix("\"").unwrap().strip_suffix("\"").unwrap();
-                        let imp = Import::IncludeLocal(name.into());
-                        import_index.add(imp);
-                    } else if s.starts_with("<") {
-                        let name = s.strip_prefix("<").unwrap().strip_suffix(">").unwrap();
-                        let imp = Import::IncludeSystem(name.into());
-                        import_index.add(imp);
-                    } else {
-                        panic!("Unhandled import type `{s}`");
-                    }
+                    import_index.add(parse_include_string(s).unwrap());
                 });
         });
 
@@ -284,4 +288,17 @@ fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8], idx: usize) -> For
         declared_type: ty,
         index: idx,
     }
+}
+
+
+#[test]
+fn test_parse_system_include() {
+    let expected = Import::IncludeSystem("stdint.h".into());
+    assert_eq!(Some(expected), parse_include_string("<stdint.h>"));
+}
+
+#[test]
+fn test_parse_local_include() {
+    let expected = Import::IncludeLocal("foo.h".into());
+    assert_eq!(Some(expected), parse_include_string("\"foo.h\""));
 }

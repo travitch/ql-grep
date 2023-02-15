@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::library::index::{library_index, MethodSignature, TypeIndex};
+use crate::preprocess::FilePreprocessingPass;
 use crate::query::ir::*;
 use crate::query::val_type::Type;
 
@@ -37,6 +38,8 @@ struct TypeEnv {
     env: HashMap<String, Type>,
     /// Provides type signatures for all of the library types and their methods
     type_index: &'static HashMap<Type, TypeIndex>,
+    /// File-level preprocessing passes required by methods referenced in the query
+    needed_file_preprocessing_passes: HashSet<FilePreprocessingPass>,
 }
 
 fn build_initial_type_environment(syntax: &Select<Syntax>) -> TypeEnv {
@@ -49,6 +52,7 @@ fn build_initial_type_environment(syntax: &Select<Syntax>) -> TypeEnv {
     TypeEnv {
         env: res,
         type_index: library_index(),
+        needed_file_preprocessing_passes: HashSet::new(),
     }
 }
 
@@ -351,13 +355,17 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
                 ))
             })?;
             let method_idx = &ty_index.method_index;
-            let MethodSignature(accessor, arg_types, ret_ty, _status) =
+            let MethodSignature(accessor, arg_types, ret_ty, _status, requires) =
                 method_idx.get(method_name).ok_or_else(|| {
                     anyhow::anyhow!(TypecheckError::InvalidMethodForType(
                         method_name.clone(),
                         base_ty.type_.clone()
                     ))
                 })?;
+
+            requires.map(|tag| {
+                env.needed_file_preprocessing_passes.insert(tag);
+            });
 
             if operands.len() != arg_types.len() {
                 let err = TypecheckError::InvalidArityForMethod(
@@ -426,11 +434,16 @@ fn typecheck_as_expr(env: &mut TypeEnv, as_expr: &AsExpr<Syntax>) -> anyhow::Res
     Ok(typed_as_expr)
 }
 
+pub struct TypedQuery {
+    pub query: Select<Typed>,
+    pub needed_file_preprocessing_passes: HashSet<FilePreprocessingPass>,
+}
+
 /// Run a type checking pass over a query, filling in types for each IR node
 ///
 /// The return types for methods (which are otherwise not obvious) are
 /// automatically derived from the documentation (see `library.kdl`)
-pub fn typecheck_query(syntax: &Select<Syntax>) -> anyhow::Result<Select<Typed>> {
+pub fn typecheck_query(syntax: &Select<Syntax>) -> anyhow::Result<TypedQuery> {
     // Note that the type environment never really updates because new
     // identifiers are not introduced outside of the declaration clause
     //
@@ -453,5 +466,10 @@ pub fn typecheck_query(syntax: &Select<Syntax>) -> anyhow::Result<Select<Typed>>
         where_formula: typed_where,
         var_decls: syntax.var_decls.clone(),
     };
-    Ok(typed_select)
+
+    let tq = TypedQuery {
+        query: typed_select,
+        needed_file_preprocessing_passes: type_env.needed_file_preprocessing_passes,
+    };
+    Ok(tq)
 }

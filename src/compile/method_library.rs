@@ -133,6 +133,24 @@ fn callable_get_return_type<'a>(
     }
 }
 
+/// Get a reference to the file containing the callable.
+///
+/// Note that this doesn't actually do much, as there is only ever one file in
+/// scope and the reference is in the evaluation context.
+///
+/// Implements:
+/// - [ref:library:Callable:getFile]
+/// - [ref:library:Function:getFile]
+/// - [ref:library:Method:getFile]
+fn callable_get_file<'a>(
+    _ti: Rc<dyn TreeInterface>,
+    _base: &'a NodeFilter,
+    operands: &'a Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    Ok(NodeFilter::FileComputation)
+}
+
 /// Match a string against a regular expression
 ///
 /// Implements:
@@ -276,6 +294,49 @@ fn type_get_name<'a>(
     }
 }
 
+/// Get the relational list of imports for a file.
+///
+/// Since there is only ever one file in scope at a time, we never inspect the
+/// base and just pull the data out of the evaluation context.
+///
+/// Implements:
+/// - [ref:library:File:getAnImport]
+fn file_get_an_import<'a>(
+    _ti: Rc<dyn TreeInterface>,
+    _base: &'a NodeFilter,
+    operands: &'a Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    let comp = NodeMatcher {
+        extract: Rc::new(move |ctx, _source| {
+            Vec::from(ctx.imports())
+        })
+    };
+    Ok(NodeFilter::ImportListComputation(comp))
+}
+
+fn import_get_name<'a>(
+    _ti: Rc<dyn TreeInterface>,
+    base: &'a NodeFilter,
+    operands: &'a Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::ImportComputation(c) => {
+            let get_import = Rc::clone(&c.extract);
+            let comp = NodeMatcher {
+                extract: Rc::new(move |ctx, source| {
+                    get_import(ctx, source).to_string()
+                })
+            };
+            Ok(NodeFilter::StringComputation(comp))
+        }
+        nf => {
+            panic!("Impossible value type for `import_get_name`: {}", nf.kind());
+        }
+    }
+}
+
 /// Validate the implementations of method calls against the claims in the
 /// library documentation.  The intent is that the library documentation should
 /// always correctly reflect what subset of CodeQL ql-grep supports.  Any
@@ -294,7 +355,7 @@ fn validate_library(impls: &HashMap<(Type, String), Handler>) {
             Some(ty_index) => {
                 let sigs = &ty_index.method_index;
                 match sigs.get(method_name) {
-                    Some(MethodSignature(_name, _arg_types, _ret_type, status)) => {
+                    Some(MethodSignature(_name, _arg_types, _ret_type, status, _requires)) => {
                         if *status == Some(Status::Unimplemented) {
                             panic!("Method `{method_name}` for type `{base_type:?}` is marked as unimplemented, but has an implementation defined");
                         }
@@ -308,7 +369,7 @@ fn validate_library(impls: &HashMap<(Type, String), Handler>) {
     }
 
     for (ty, ty_index) in lib_idx {
-        for (method_name, MethodSignature(_name, _arg_types, _ret_type, status)) in
+        for (method_name, MethodSignature(_name, _arg_types, _ret_type, status, _requires)) in
             &ty_index.method_index
         {
             // Implemented corresponds to None; in the future, this might be a
@@ -378,6 +439,19 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     );
 
     impls.insert(
+        (Type::Method, "getFile".into()),
+        Handler(Arc::new(callable_get_file)),
+    );
+    impls.insert(
+        (Type::Function, "getFile".into()),
+        Handler(Arc::new(callable_get_file)),
+    );
+    impls.insert(
+        (Type::Callable, "getFile".into()),
+        Handler(Arc::new(callable_get_file)),
+    );
+
+    impls.insert(
         (Type::Method, "getType".into()),
         Handler(Arc::new(callable_get_return_type)),
     );
@@ -411,6 +485,16 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     impls.insert(
         (Type::Type, "getName".into()),
         Handler(Arc::new(type_get_name)),
+    );
+
+    impls.insert(
+        (Type::File, "getAnImport".into()),
+        Handler(Arc::new(file_get_an_import)),
+    );
+
+    impls.insert(
+        (Type::Import, "getName".into()),
+        Handler(Arc::new(import_get_name)),
     );
 
     validate_library(&impls);

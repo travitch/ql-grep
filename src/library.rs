@@ -11,6 +11,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 use crate::query::val_type;
+use crate::preprocess::FilePreprocessingPass;
 
 pub const LIBRARY_DATA: &str = include_str!("../doc/library.kdl");
 
@@ -64,6 +65,8 @@ pub struct Method {
     pub parameters: Vec<Parameter>,
     #[knuffel(property, str)]
     pub tag: Option<String>,
+    #[knuffel(property, str)]
+    pub requires: Option<FilePreprocessingPass>,
 }
 
 /// This type is factored out so that we can use the `str` knuffel parser; it
