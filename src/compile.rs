@@ -95,9 +95,7 @@ fn compile_var_ref(var_name: &str, var_type: &Type) -> anyhow::Result<NodeFilter
         Type::Callable | Type::Function | Type::Method => {
             let this_s = var_name.to_string();
             let m = NodeMatcher {
-                extract: Rc::new(move |_, _| {
-                    WithRanges::value(CallableRef::new(this_s.as_ref()))
-                }),
+                extract: Rc::new(move |_, _| WithRanges::value(CallableRef::new(this_s.as_ref()))),
             };
             Ok(NodeFilter::CallableComputation(m))
         }
@@ -133,7 +131,10 @@ fn compile_relational_comparison(
                         extract: Rc::new(move |ctx, source| {
                             let lhs_result = lhs_f(ctx, source);
                             let rhs_result = rhs_f(ctx, source);
-                            WithRanges::new(lhs_result.value < rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                            WithRanges::new(
+                                lhs_result.value < rhs_result.value,
+                                vec![lhs_result.ranges, rhs_result.ranges],
+                            )
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -143,7 +144,10 @@ fn compile_relational_comparison(
                         extract: Rc::new(move |ctx, source| {
                             let lhs_result = lhs_f(ctx, source);
                             let rhs_result = rhs_f(ctx, source);
-                            WithRanges::new(lhs_result.value <= rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                            WithRanges::new(
+                                lhs_result.value <= rhs_result.value,
+                                vec![lhs_result.ranges, rhs_result.ranges],
+                            )
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -153,7 +157,10 @@ fn compile_relational_comparison(
                         extract: Rc::new(move |ctx, source| {
                             let lhs_result = lhs_f(ctx, source);
                             let rhs_result = rhs_f(ctx, source);
-                            WithRanges::new(lhs_result.value > rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                            WithRanges::new(
+                                lhs_result.value > rhs_result.value,
+                                vec![lhs_result.ranges, rhs_result.ranges],
+                            )
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -163,7 +170,10 @@ fn compile_relational_comparison(
                         extract: Rc::new(move |ctx, source| {
                             let lhs_result = lhs_f(ctx, source);
                             let rhs_result = rhs_f(ctx, source);
-                            WithRanges::new(lhs_result.value >= rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                            WithRanges::new(
+                                lhs_result.value >= rhs_result.value,
+                                vec![lhs_result.ranges, rhs_result.ranges],
+                            )
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -192,7 +202,10 @@ fn compile_equality_comparison(
                         extract: Rc::new(move |ctx, source| {
                             let lhs_result = lhs_f(ctx, source);
                             let rhs_result = rhs_f(ctx, source);
-                            WithRanges::new(lhs_result.value == rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                            WithRanges::new(
+                                lhs_result.value == rhs_result.value,
+                                vec![lhs_result.ranges, rhs_result.ranges],
+                            )
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -202,7 +215,10 @@ fn compile_equality_comparison(
                         extract: Rc::new(move |ctx, source| {
                             let lhs_result = lhs_f(ctx, source);
                             let rhs_result = rhs_f(ctx, source);
-                            WithRanges::new(lhs_result.value != rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                            WithRanges::new(
+                                lhs_result.value != rhs_result.value,
+                                vec![lhs_result.ranges, rhs_result.ranges],
+                            )
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -218,7 +234,10 @@ fn compile_equality_comparison(
                         extract: Rc::new(move |ctx, source| {
                             let lhs_result = lhs_f(ctx, source);
                             let rhs_result = rhs_f(ctx, source);
-                            WithRanges::new(lhs_result.value == rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                            WithRanges::new(
+                                lhs_result.value == rhs_result.value,
+                                vec![lhs_result.ranges, rhs_result.ranges],
+                            )
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -228,7 +247,10 @@ fn compile_equality_comparison(
                         extract: Rc::new(move |ctx, source| {
                             let lhs_result = lhs_f(ctx, source);
                             let rhs_result = rhs_f(ctx, source);
-                            WithRanges::new(lhs_result.value != rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                            WithRanges::new(
+                                lhs_result.value != rhs_result.value,
+                                vec![lhs_result.ranges, rhs_result.ranges],
+                            )
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -251,8 +273,11 @@ fn compile_equality_comparison(
                                         extract: Rc::new(move |ctx, source| {
                                             let lhs_result = sc_ref(ctx, source);
                                             let rhs_result = rhs_fn_ref(ctx, source);
-                                            WithRanges::new(lhs_result.value == rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
-                                        })
+                                            WithRanges::new(
+                                                lhs_result.value == rhs_result.value,
+                                                vec![lhs_result.ranges, rhs_result.ranges],
+                                            )
+                                        }),
                                     };
                                     Ok(NodeFilter::Predicate(m))
                                 }
@@ -279,7 +304,10 @@ fn compile_equality_comparison(
                                         extract: Rc::new(move |ctx, source| {
                                             let lhs_result = sc_ref(ctx, source);
                                             let rhs_result = rhs_fn_ref(ctx, source);
-                                            WithRanges::new(lhs_result.value != rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                                            WithRanges::new(
+                                                lhs_result.value != rhs_result.value,
+                                                vec![lhs_result.ranges, rhs_result.ranges],
+                                            )
                                         }),
                                     };
                                     Ok(NodeFilter::Predicate(m))
@@ -310,7 +338,11 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
             compile_relational_comparison(lhs_f, *op, rhs_f)
         }
-        Expr_::Bind { bound_var, relation_expr, evaluated_expr } => {
+        Expr_::Bind {
+            bound_var,
+            relation_expr,
+            evaluated_expr,
+        } => {
             // Wrap the computation to be evaluated in a wrapper of the
             // appropriate type that binds `var_decl` for each possible value.
             // If there are no bindings, return False.  The expression under the
@@ -384,7 +416,10 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                             // to drop the ranges; however, it could be the case
                             // that the result is later negated, so we shouldn't
                             // assume that the ranges aren't relevant
-                            WithRanges::new(lhs_res.value && rhs_res.value, vec!(lhs_res.ranges, rhs_res.ranges))
+                            WithRanges::new(
+                                lhs_res.value && rhs_res.value,
+                                vec![lhs_res.ranges, rhs_res.ranges],
+                            )
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -452,7 +487,11 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                 }
             }
         }
-        Expr_::QualifiedAccess { base, method_name, operands } => {
+        Expr_::QualifiedAccess {
+            base,
+            method_name,
+            operands,
+        } => {
             // We store the method implementations in a map to keep this case of
             // the match reasonably-sized.  We look up method implementations
             // based on the method name and the base type computed by the type

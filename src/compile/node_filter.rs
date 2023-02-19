@@ -1,4 +1,6 @@
-use crate::compile::interface::{CallableRef, FormalArgument, LanguageType, NodeMatcher, NodeListMatcher};
+use crate::compile::interface::{
+    CallableRef, FormalArgument, LanguageType, NodeListMatcher, NodeMatcher,
+};
 use crate::preprocess::Import;
 use crate::query::ir::CachedRegex;
 

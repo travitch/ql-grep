@@ -10,7 +10,7 @@ pub struct WithRanges<T> {
     pub ranges: Vec<tree_sitter::Range>,
 }
 
-impl <T> WithRanges<T> {
+impl<T> WithRanges<T> {
     /// Construct a `WithRanges` from just a value with an empty list of ranges
     pub fn value(t: T) -> Self {
         WithRanges {
@@ -34,7 +34,7 @@ impl <T> WithRanges<T> {
     pub fn new_single(t: T, r: tree_sitter::Range) -> Self {
         WithRanges {
             value: t,
-            ranges: vec!(r),
+            ranges: vec![r],
         }
     }
 }

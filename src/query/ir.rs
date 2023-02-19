@@ -112,7 +112,7 @@ pub enum Expr_<R: Repr> {
     EqualityComparison {
         lhs: Box<Expr<R>>,
         op: EqualityOp,
-        rhs: Box<Expr<R>>
+        rhs: Box<Expr<R>>,
     },
     /// A conjunction of two boolean expressions
     LogicalConjunction {
@@ -135,7 +135,7 @@ pub enum Expr_<R: Repr> {
     // Count(Box<Expr<R>>),
     Aggregate {
         op: AggregateOp,
-        operands: Vec<AsExpr<R>>
+        operands: Vec<AsExpr<R>>,
     },
 }
 
@@ -179,7 +179,7 @@ impl Display for Constant {
             Constant::Regex(cr) => {
                 let s = &cr.0;
                 write!(f, "/{s}/")
-            },
+            }
         }
     }
 }
@@ -220,65 +220,91 @@ impl Display for Untyped {
 
 impl<R: Repr> Expr_<R>
 where
-  <R as Repr>::Type: Display
+    <R as Repr>::Type: Display,
 {
     pub fn to_doc(&self) -> RcDoc<()> {
         match self {
             Expr_::ConstantExpr(c) => RcDoc::as_string(c),
-            Expr_::VarRef(s) => parens(RcDoc::text("var-ref ")
-                .append(RcDoc::text(s))),
-            Expr_::Bind { bound_var, relation_expr, evaluated_expr } => RcDoc::text("(bind")
+            Expr_::VarRef(s) => parens(RcDoc::text("var-ref ").append(RcDoc::text(s))),
+            Expr_::Bind {
+                bound_var,
+                relation_expr,
+                evaluated_expr,
+            } => RcDoc::text("(bind")
                 .append(RcDoc::hardline())
-                .append(RcDoc::text("(= ")
-                    .append(RcDoc::as_string(&bound_var.name))
-                    .append(RcDoc::space())
-                    .append(relation_expr.to_doc())
-                    .append(RcDoc::text(")"))
-                    .append(RcDoc::hardline())
-                    .append(evaluated_expr.to_doc())
-                    .append(RcDoc::hardline())
-                    .nest(2))
+                .append(
+                    RcDoc::text("(= ")
+                        .append(RcDoc::as_string(&bound_var.name))
+                        .append(RcDoc::space())
+                        .append(relation_expr.to_doc())
+                        .append(RcDoc::text(")"))
+                        .append(RcDoc::hardline())
+                        .append(evaluated_expr.to_doc())
+                        .append(RcDoc::hardline())
+                        .nest(2),
+                )
                 .append(RcDoc::text(")")),
-            Expr_::RelationalComparison { lhs, op, rhs } => parens(RcDoc::as_string(op)
-                .append(RcDoc::space())
-                .append(lhs.to_doc())
-                .append(RcDoc::space())
-                .append(rhs.to_doc())
-                .append(RcDoc::text(")"))),
-            Expr_::EqualityComparison { lhs, op, rhs } => parens(RcDoc::as_string(op)
-                .append(RcDoc::space())
-                .append(lhs.to_doc())
-                .append(RcDoc::space())
-                .append(rhs.to_doc())
-                .append(RcDoc::text(")"))),
-            Expr_::LogicalConjunction { lhs, rhs } => parens(RcDoc::text("and")
-                .append(RcDoc::hardline())
-                .append(lhs.to_doc()
-                    .append(RcDoc::hardline())
+            Expr_::RelationalComparison { lhs, op, rhs } => parens(
+                RcDoc::as_string(op)
+                    .append(RcDoc::space())
+                    .append(lhs.to_doc())
+                    .append(RcDoc::space())
                     .append(rhs.to_doc())
-                    .nest(2))),
-            Expr_::LogicalDisjunction { lhs, rhs } => parens(RcDoc::text("or")
-                .append(RcDoc::hardline())
-                .append(lhs.to_doc()
-                    .append(RcDoc::hardline())
+                    .append(RcDoc::text(")")),
+            ),
+            Expr_::EqualityComparison { lhs, op, rhs } => parens(
+                RcDoc::as_string(op)
+                    .append(RcDoc::space())
+                    .append(lhs.to_doc())
+                    .append(RcDoc::space())
                     .append(rhs.to_doc())
-                    .nest(2))),
-            Expr_::QualifiedAccess { base, method_name, operands } => base.to_doc()
+                    .append(RcDoc::text(")")),
+            ),
+            Expr_::LogicalConjunction { lhs, rhs } => parens(
+                RcDoc::text("and").append(RcDoc::hardline()).append(
+                    lhs.to_doc()
+                        .append(RcDoc::hardline())
+                        .append(rhs.to_doc())
+                        .nest(2),
+                ),
+            ),
+            Expr_::LogicalDisjunction { lhs, rhs } => parens(
+                RcDoc::text("or").append(RcDoc::hardline()).append(
+                    lhs.to_doc()
+                        .append(RcDoc::hardline())
+                        .append(rhs.to_doc())
+                        .nest(2),
+                ),
+            ),
+            Expr_::QualifiedAccess {
+                base,
+                method_name,
+                operands,
+            } => base
+                .to_doc()
                 .append(RcDoc::text("."))
                 .append(RcDoc::as_string(method_name))
                 .append(RcDoc::text("("))
-                .append(RcDoc::intersperse(operands.iter().map(|o| o.to_doc()), RcDoc::text(",")))
+                .append(RcDoc::intersperse(
+                    operands.iter().map(|o| o.to_doc()),
+                    RcDoc::text(","),
+                ))
                 .append(RcDoc::text(")")),
-            Expr_::Aggregate { op, operands } => parens(RcDoc::as_string(op)
-                .append(RcDoc::intersperse(operands.iter().map(|o| o.expr.to_doc()), RcDoc::text(",")))
-                .append(RcDoc::text(")"))),
+            Expr_::Aggregate { op, operands } => parens(
+                RcDoc::as_string(op)
+                    .append(RcDoc::intersperse(
+                        operands.iter().map(|o| o.expr.to_doc()),
+                        RcDoc::text(","),
+                    ))
+                    .append(RcDoc::text(")")),
+            ),
         }
     }
 }
 
 impl<R: Repr> Expr<R>
 where
-  <R as Repr>::Type: Display
+    <R as Repr>::Type: Display,
 {
     pub fn to_doc(&self) -> RcDoc<()> {
         self.expr.to_doc()
@@ -293,28 +319,32 @@ where
 
 impl<R: Repr> Select<R>
 where
-  <R as Repr>::Type: Display
+    <R as Repr>::Type: Display,
 {
     pub fn to_doc(&self) -> RcDoc<()> {
-        let from = RcDoc::text("from ")
-            .append(RcDoc::intersperse(self.var_decls.iter().map(|v| {
+        let from = RcDoc::text("from ").append(RcDoc::intersperse(
+            self.var_decls.iter().map(|v| {
                 let doc = RcDoc::as_string(&v.type_)
                     .append(RcDoc::space())
                     .append(RcDoc::as_string(&v.name));
                 parens(doc)
-            }), RcDoc::space()));
-        let select = RcDoc::text("select ")
-            .append(RcDoc::intersperse(self.select_exprs.iter().map(|e| {
-                e.expr.to_doc()
-            }), RcDoc::space()));
-        parens(RcDoc::text("query")
-            .append(RcDoc::hardline())
-            .append(parens(from)
-                .append(RcDoc::hardline())
-                .append(self.where_formula.to_doc())
-                .append(RcDoc::hardline())
-                .append(parens(select))
-                .nest(2)))
+            }),
+            RcDoc::space(),
+        ));
+        let select = RcDoc::text("select ").append(RcDoc::intersperse(
+            self.select_exprs.iter().map(|e| e.expr.to_doc()),
+            RcDoc::space(),
+        ));
+        parens(
+            RcDoc::text("query").append(RcDoc::hardline()).append(
+                parens(from)
+                    .append(RcDoc::hardline())
+                    .append(self.where_formula.to_doc())
+                    .append(RcDoc::hardline())
+                    .append(parens(select))
+                    .nest(2),
+            ),
+        )
     }
 
     pub fn to_pretty(&self, width: usize) -> String {
@@ -325,7 +355,5 @@ where
 }
 
 fn parens(d: RcDoc<()>) -> RcDoc<()> {
-    RcDoc::text("(")
-        .append(d)
-        .append(RcDoc::text(")"))
+    RcDoc::text("(").append(d).append(RcDoc::text(")"))
 }

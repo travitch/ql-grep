@@ -27,7 +27,7 @@ impl TreeInterface for JavaTreeInterface {
                 };
 
                 Some(matcher)
-            },
+            }
             _ => None,
         }
     }
@@ -42,11 +42,13 @@ impl TreeInterface for JavaTreeInterface {
         let mut import_index = FileImportIndex::new();
 
         qms.for_each(|qm| {
-            qm.captures[0].node.utf8_text(source)
-                .map_or_else(|_e| error!("Error decoding source as UTF8 for import"), |s| {
+            qm.captures[0].node.utf8_text(source).map_or_else(
+                |_e| error!("Error decoding source as UTF8 for import"),
+                |s| {
                     let imp = Import::Import(s.into());
                     import_index.add(imp);
-                });
+                },
+            );
         });
 
         import_index
@@ -98,7 +100,10 @@ impl TreeInterface for JavaTreeInterface {
         Some(matcher)
     }
 
-    fn callable_return_type(&self, node: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<LanguageType>> {
+    fn callable_return_type(
+        &self,
+        node: &NodeMatcher<CallableRef>,
+    ) -> Option<NodeMatcher<LanguageType>> {
         let get_callable_ref = Rc::clone(&node.extract);
         let matcher = NodeMatcher {
             extract: Rc::new(move |ctx, source| {
@@ -137,7 +142,7 @@ impl TreeInterface for JavaTreeInterface {
                 // We compute the number of matches against ranges instead of
                 // the query matches because the `map` operation consumes the
                 // iterator
-                WithRanges::new(!ranges.is_empty(), vec!(ranges))
+                WithRanges::new(!ranges.is_empty(), vec![ranges])
             }),
         }
     }

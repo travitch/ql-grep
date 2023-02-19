@@ -10,8 +10,8 @@ use std::error::Error;
 use std::fmt::Display;
 use std::str::FromStr;
 
-use crate::query::val_type;
 use crate::preprocess::FilePreprocessingPass;
+use crate::query::val_type;
 
 pub const LIBRARY_DATA: &str = include_str!("../doc/library.kdl");
 

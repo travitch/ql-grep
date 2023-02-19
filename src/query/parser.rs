@@ -156,20 +156,16 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
             })?;
             let rhs = parse_expr(rhs_node, source)?;
             match op {
-                SomeComparison::RelComp(rop) => {
-                    Expr_::RelationalComparison {
-                        lhs: Box::new(lhs),
-                        op: rop,
-                        rhs: Box::new(rhs),
-                    }
-                }
-                SomeComparison::EqComp(eop) => {
-                    Expr_::EqualityComparison {
-                        lhs: Box::new(lhs),
-                        op: eop,
-                        rhs: Box::new(rhs)
-                    }
-                }
+                SomeComparison::RelComp(rop) => Expr_::RelationalComparison {
+                    lhs: Box::new(lhs),
+                    op: rop,
+                    rhs: Box::new(rhs),
+                },
+                SomeComparison::EqComp(eop) => Expr_::EqualityComparison {
+                    lhs: Box::new(lhs),
+                    op: eop,
+                    rhs: Box::new(rhs),
+                },
             }
         }
         "conjunction" => {
@@ -218,7 +214,10 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
             let agg_body = get_child_of_kind(node, "expr_aggregate_body")?;
             let as_exprs_node = get_child_of_kind(agg_body, "asExprs")?;
             let exprs = parse_as_exprs(as_exprs_node, source)?;
-            Expr_::Aggregate { op, operands: exprs }
+            Expr_::Aggregate {
+                op,
+                operands: exprs,
+            }
         }
         "par_expr" => {
             // Parenthesized expressions have 3 children:

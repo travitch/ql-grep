@@ -55,10 +55,12 @@ impl TreeInterface for CPPTreeInterface {
         let mut import_index = FileImportIndex::new();
 
         qms.for_each(|qm| {
-            qm.captures[0].node.utf8_text(source)
-                .map_or_else(|_e| error!("Error decoding source as UTF-8 for include"), |s| {
+            qm.captures[0].node.utf8_text(source).map_or_else(
+                |_e| error!("Error decoding source as UTF-8 for include"),
+                |s| {
                     import_index.add(parse_include_string(s).unwrap());
-                });
+                },
+            );
         });
 
         import_index
@@ -103,13 +105,19 @@ impl TreeInterface for CPPTreeInterface {
                 let mut qms = cur.matches(&query, *node, source);
                 let m = qms.next().unwrap();
                 let name_node = &m.captures[0].node;
-                WithRanges::new_single(callable_name_node_to_string(name_node, source), name_node.range())
+                WithRanges::new_single(
+                    callable_name_node_to_string(name_node, source),
+                    name_node.range(),
+                )
             }),
         };
         Some(matcher)
     }
 
-    fn callable_return_type(&self, node: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<LanguageType>> {
+    fn callable_return_type(
+        &self,
+        node: &NodeMatcher<CallableRef>,
+    ) -> Option<NodeMatcher<LanguageType>> {
         let get_callable_ref = Rc::clone(&node.extract);
         let matcher = NodeMatcher {
             extract: Rc::new(move |ctx, source| {
@@ -140,8 +148,11 @@ impl TreeInterface for CPPTreeInterface {
 
                 let parsed_decl = decl_node.as_ref().map(|d| parse_declarator(d, source));
                 // FIXME: Grab the declarator range too, if present
-                let ranges = vec!(ty_node.unwrap().range());
-                WithRanges::new(parse_type_node(&parsed_decl, &ty_node.unwrap(), source), vec!(ranges))
+                let ranges = vec![ty_node.unwrap().range()];
+                WithRanges::new(
+                    parse_type_node(&parsed_decl, &ty_node.unwrap(), source),
+                    vec![ranges],
+                )
             }),
         };
         Some(matcher)
@@ -159,7 +170,7 @@ impl TreeInterface for CPPTreeInterface {
                     .unwrap_or_else(|e| panic!("Error while querying for errors {e:?}"));
                 let qms = cur.matches(&query, *node, source);
                 let ranges = qms.map(|m| m.captures[0].node.range()).collect::<Vec<_>>();
-                WithRanges::new(!ranges.is_empty(), vec!(ranges))
+                WithRanges::new(!ranges.is_empty(), vec![ranges])
             }),
         }
     }
@@ -273,12 +284,8 @@ fn parse_declarator<'a>(n: &'a Node, src: &'a [u8]) -> Declarator {
             // FIXME: Figure out what this actually is
             Declarator::Unnamed
         }
-        "qualified_identifier" => {
-            Declarator::Unnamed
-        }
-        "abstract_parenthesized_declarator" => {
-            Declarator::Unnamed
-        }
+        "qualified_identifier" => Declarator::Unnamed,
+        "abstract_parenthesized_declarator" => Declarator::Unnamed,
         k => {
             panic!("Unsupported C/C++ declarator type `{k}`");
         }
@@ -297,7 +304,6 @@ fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8], idx: usize) -> For
         index: idx,
     }
 }
-
 
 #[test]
 fn test_parse_system_include() {

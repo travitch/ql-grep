@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::compile::errors::PlanError;
-use crate::compile::interface::{LanguageType, NodeMatcher, NodeListMatcher, TreeInterface};
+use crate::compile::interface::{LanguageType, NodeListMatcher, NodeMatcher, TreeInterface};
 use crate::compile::NodeFilter;
 use crate::library::index::{library_index, MethodSignature};
 use crate::library::Status;
@@ -103,7 +103,7 @@ fn callable_has_parse_error<'a>(
         NodeFilter::CallableComputation(callable_matcher) => {
             let error_matcher = ti.callable_has_parse_error(callable_matcher);
             Ok(NodeFilter::Predicate(error_matcher))
-        },
+        }
         _ => {
             panic!("Implementation error: only callables should be possible here");
         }
@@ -124,10 +124,11 @@ fn callable_get_return_type<'a>(
     assert!(operands.is_empty());
     match base {
         NodeFilter::CallableComputation(callable_matcher) => {
-            let ty_matcher = ti.callable_return_type(callable_matcher)
-                .ok_or_else(|| PlanError::NotSupported("get-return-type".into(), "callable".into()))?;
+            let ty_matcher = ti.callable_return_type(callable_matcher).ok_or_else(|| {
+                PlanError::NotSupported("get-return-type".into(), "callable".into())
+            })?;
             Ok(NodeFilter::TypeComputation(ty_matcher))
-        },
+        }
         _ => {
             panic!("Implementation error: only callables should be possible here");
         }
@@ -179,7 +180,10 @@ fn string_regexp_match<'a>(
     let comp = NodeMatcher {
         extract: Rc::new(move |ctx, source| {
             let matched_string = x(ctx, source);
-            WithRanges::new(rx.is_match(matched_string.value.as_ref()), vec!(matched_string.ranges))
+            WithRanges::new(
+                rx.is_match(matched_string.value.as_ref()),
+                vec![matched_string.ranges],
+            )
         }),
     };
     Ok(NodeFilter::Predicate(comp))
@@ -202,8 +206,11 @@ fn parameter_get_name<'a>(
                 extract: Rc::new(move |ctx, source| {
                     let parameter_result = x(ctx, source);
                     WithRanges::new(
-                        parameter_result.value.name.unwrap_or_else(|| "<none>".into()),
-                        vec!(parameter_result.ranges)
+                        parameter_result
+                            .value
+                            .name
+                            .unwrap_or_else(|| "<none>".into()),
+                        vec![parameter_result.ranges],
                     )
                 }),
             };
@@ -234,7 +241,10 @@ fn parameter_get_type<'a>(
                     // structured) representation if the type is missing
                     let default_ty = LanguageType::new("<Any>");
                     let parameter_result = x(ctx, source);
-                    WithRanges::new(parameter_result.value.declared_type.unwrap_or(default_ty), vec!(parameter_result.ranges))
+                    WithRanges::new(
+                        parameter_result.value.declared_type.unwrap_or(default_ty),
+                        vec![parameter_result.ranges],
+                    )
                 }),
             };
 
@@ -262,8 +272,11 @@ fn parameter_get_index<'a>(
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
                     let argument_result = x(ctx, source);
-                    WithRanges::new(argument_result.value.index as i32, vec!(argument_result.ranges))
-                })
+                    WithRanges::new(
+                        argument_result.value.index as i32,
+                        vec![argument_result.ranges],
+                    )
+                }),
             };
             Ok(NodeFilter::NumericComputation(comp))
         }
@@ -289,7 +302,7 @@ fn type_get_name<'a>(
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
                     let type_result = x(ctx, source);
-                    WithRanges::new(type_result.value.as_type_string(), vec!(type_result.ranges))
+                    WithRanges::new(type_result.value.as_type_string(), vec![type_result.ranges])
                 }),
             };
 
@@ -319,8 +332,12 @@ fn file_get_an_import<'a>(
     assert!(operands.is_empty());
     let comp = NodeListMatcher {
         extract: Rc::new(move |ctx, _source| {
-            ctx.imports().iter().cloned().map(WithRanges::value).collect::<Vec<_>>()
-        })
+            ctx.imports()
+                .iter()
+                .cloned()
+                .map(WithRanges::value)
+                .collect::<Vec<_>>()
+        }),
     };
     Ok(NodeFilter::ImportListComputation(comp))
 }
@@ -337,8 +354,8 @@ fn import_get_name<'a>(
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
                     let import_res = get_import(ctx, source);
-                    WithRanges::new(import_res.value.to_string(), vec!(import_res.ranges))
-                })
+                    WithRanges::new(import_res.value.to_string(), vec![import_res.ranges])
+                }),
             };
             Ok(NodeFilter::StringComputation(comp))
         }
