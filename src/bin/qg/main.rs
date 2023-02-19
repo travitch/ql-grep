@@ -66,7 +66,7 @@ fn process_query(
 ) -> anyhow::Result<Vec<QueryResult>> {
     let mut cursor = tree_sitter::QueryCursor::new();
     let tree_interface: Rc<dyn TreeInterface> = make_tree_interface(sf.lang);
-    let compiled_query = compile_query(sf.lang, ast.language(), Rc::clone(&tree_interface), &query_plan)?;
+    let compiled_query = compile_query(sf.lang, ast.language(), Rc::clone(&tree_interface), query_plan)?;
     let result = evaluate_plan(sf, ast, Rc::clone(&tree_interface), &mut cursor, &compiled_query)?;
     Ok(result)
 }
@@ -152,7 +152,7 @@ fn spawn_accumulator_thread(
                     stats.num_files_parsed += 1;
                     stats.num_matches += qr.results.len();
                     for res in qr.results {
-                        result_printer::print_query_result(&result_writer, &qr.source_file, &res, &mut output_dest)
+                        result_printer::print_query_result(&*result_writer, &qr.source_file, &res, &mut output_dest)
                             .unwrap_or_else(|e| {
                                 error!("Error while printing a result: {:?}", e);
                             });
@@ -211,7 +211,7 @@ fn main() -> anyhow::Result<()> {
         let manpage = clap_mangen::Man::new(cli::Cli::command());
         let mut buffer = Vec::new();
         manpage.render(&mut buffer)?;
-        std::io::stdout().write(buffer.as_slice())?;
+        std::io::stdout().write_all(buffer.as_slice())?;
         std::process::exit(0);
     }
 
@@ -225,7 +225,6 @@ fn main() -> anyhow::Result<()> {
     initialize_logging(&args.log_file)?;
 
     let thread_count = args.num_threads
-        .clone()
         .unwrap_or(std::cmp::max(1, num_cpus::get()) - 1);
 
     let cwd = std::env::current_dir()?;
@@ -244,7 +243,7 @@ fn main() -> anyhow::Result<()> {
 
     // Spawn a thread to collect all of the intermediate results produced by
     // worker threads over the channel.
-    let accumulator_handle = spawn_accumulator_thread(args.clone(), recv);
+    let accumulator_handle = spawn_accumulator_thread(args, recv);
 
     // Run in parallel, but reserve at least one core if the user has not
     // explicitly requested a number of threads to avoid totally drowning the

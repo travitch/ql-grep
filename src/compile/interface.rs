@@ -140,6 +140,12 @@ impl<'a> EvaluationContext<'a> {
     }
 }
 
+impl<'a> Default for EvaluationContext<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// An interface for providing a query and a processor for the results to
 /// produce a result of type `R`
 ///
@@ -206,7 +212,7 @@ pub trait TreeInterface {
     ///
     /// Note that this is meant to be used pre-evaluation, rather than during
     /// compilation.
-    fn file_imports<'a>(&self, root: &Node, source: &'a [u8]) -> FileImportIndex;
+    fn file_imports(&self, root: &Node, source: &[u8]) -> FileImportIndex;
 
     /// A node matcher that extracts formal arguments from a callable node
     /// (e.g., a method or function)
