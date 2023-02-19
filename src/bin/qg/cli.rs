@@ -21,4 +21,6 @@ pub struct Cli {
     pub num_threads: Option<usize>,
     #[arg(long, help = "Print internal representations of the query as it is transformed and then exit")]
     pub print_query_ir: bool,
+    #[arg(long, help = "Suppress ANSI terminal output when writing matches to the terminal")]
+    pub disable_ansi: bool,
 }

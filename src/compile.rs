@@ -18,6 +18,7 @@ use crate::preprocess::FilePreprocessingPass;
 use crate::query::ir::{AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Typed, VarDecl};
 use crate::query::val_type::Type;
 use crate::source_file::Language;
+use crate::with_ranges::WithRanges;
 
 /// The actions that comprise a query plan
 pub enum QueryAction {
@@ -59,28 +60,28 @@ fn compile_constant(c: &Constant) -> NodeFilter {
         Constant::Boolean(b) => {
             let this_b = *b;
             let m = NodeMatcher {
-                extract: Rc::new(move |_, _| this_b),
+                extract: Rc::new(move |_, _| WithRanges::value(this_b)),
             };
             NodeFilter::Predicate(m)
         }
         Constant::Integer(i) => {
             let this_i = *i;
             let m = NodeMatcher {
-                extract: Rc::new(move |_, _| this_i),
+                extract: Rc::new(move |_, _| WithRanges::value(this_i)),
             };
             NodeFilter::NumericComputation(m)
         }
         Constant::String_(s) => {
             let this_s = s.clone();
             let m = NodeMatcher {
-                extract: Rc::new(move |_, _| this_s.clone()),
+                extract: Rc::new(move |_, _| WithRanges::value(this_s.clone())),
             };
             NodeFilter::StringComputation(m)
         }
         Constant::Regex(cr) => {
             let this_cr = cr.clone();
             let m = NodeMatcher {
-                extract: Rc::new(move |_, _| this_cr.clone()),
+                extract: Rc::new(move |_, _| WithRanges::value(this_cr.clone())),
             };
             NodeFilter::RegexComputation(m)
         }
@@ -94,7 +95,9 @@ fn compile_var_ref(var_name: &str, var_type: &Type) -> anyhow::Result<NodeFilter
         Type::Callable | Type::Function | Type::Method => {
             let this_s = var_name.to_string();
             let m = NodeMatcher {
-                extract: Rc::new(move |_, _| CallableRef::new(this_s.as_ref())),
+                extract: Rc::new(move |_, _| {
+                    WithRanges::value(CallableRef::new(this_s.as_ref()))
+                }),
             };
             Ok(NodeFilter::CallableComputation(m))
         }
@@ -128,7 +131,9 @@ fn compile_relational_comparison(
                 CompOp::LT => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            lhs_f(ctx, source) < rhs_f(ctx, source)
+                            let lhs_result = lhs_f(ctx, source);
+                            let rhs_result = rhs_f(ctx, source);
+                            WithRanges::new(lhs_result.value < rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -136,7 +141,9 @@ fn compile_relational_comparison(
                 CompOp::LE => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            lhs_f(ctx, source) <= rhs_f(ctx, source)
+                            let lhs_result = lhs_f(ctx, source);
+                            let rhs_result = rhs_f(ctx, source);
+                            WithRanges::new(lhs_result.value <= rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -144,7 +151,9 @@ fn compile_relational_comparison(
                 CompOp::GT => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            lhs_f(ctx, source) > rhs_f(ctx, source)
+                            let lhs_result = lhs_f(ctx, source);
+                            let rhs_result = rhs_f(ctx, source);
+                            WithRanges::new(lhs_result.value > rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -152,7 +161,9 @@ fn compile_relational_comparison(
                 CompOp::GE => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            lhs_f(ctx, source) >= rhs_f(ctx, source)
+                            let lhs_result = lhs_f(ctx, source);
+                            let rhs_result = rhs_f(ctx, source);
+                            WithRanges::new(lhs_result.value >= rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -179,7 +190,9 @@ fn compile_equality_comparison(
                 EqualityOp::EQ => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            lhs_f(ctx, source) == rhs_f(ctx, source)
+                            let lhs_result = lhs_f(ctx, source);
+                            let rhs_result = rhs_f(ctx, source);
+                            WithRanges::new(lhs_result.value == rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -187,7 +200,9 @@ fn compile_equality_comparison(
                 EqualityOp::NE => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            lhs_f(ctx, source) != rhs_f(ctx, source)
+                            let lhs_result = lhs_f(ctx, source);
+                            let rhs_result = rhs_f(ctx, source);
+                            WithRanges::new(lhs_result.value != rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -201,7 +216,9 @@ fn compile_equality_comparison(
                 EqualityOp::EQ => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            lhs_f(ctx, source) == rhs_f(ctx, source)
+                            let lhs_result = lhs_f(ctx, source);
+                            let rhs_result = rhs_f(ctx, source);
+                            WithRanges::new(lhs_result.value == rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -209,7 +226,9 @@ fn compile_equality_comparison(
                 EqualityOp::NE => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            lhs_f(ctx, source) != rhs_f(ctx, source)
+                            let lhs_result = lhs_f(ctx, source);
+                            let rhs_result = rhs_f(ctx, source);
+                            WithRanges::new(lhs_result.value != rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -230,8 +249,10 @@ fn compile_equality_comparison(
                                     let sc_ref = Rc::clone(&sc.extract);
                                     let m = NodeMatcher {
                                         extract: Rc::new(move |ctx, source| {
-                                            sc_ref(ctx, source) == rhs_fn_ref(ctx, source)
-                                        }),
+                                            let lhs_result = sc_ref(ctx, source);
+                                            let rhs_result = rhs_fn_ref(ctx, source);
+                                            WithRanges::new(lhs_result.value == rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
+                                        })
                                     };
                                     Ok(NodeFilter::Predicate(m))
                                 }
@@ -256,7 +277,9 @@ fn compile_equality_comparison(
                                     let sc_ref = Rc::clone(&sc.extract);
                                     let m = NodeMatcher {
                                         extract: Rc::new(move |ctx, source| {
-                                            sc_ref(ctx, source) != rhs_fn_ref(ctx, source)
+                                            let lhs_result = sc_ref(ctx, source);
+                                            let rhs_result = rhs_fn_ref(ctx, source);
+                                            WithRanges::new(lhs_result.value != rhs_result.value, vec!(lhs_result.ranges, rhs_result.ranges))
                                         }),
                                     };
                                     Ok(NodeFilter::Predicate(m))
@@ -310,7 +333,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
                             let param_ref_inner = param_ref.clone();
-                            let mut result = false;
+                            let mut collected_ranges = Vec::new();
                             let params = (param_comp.extract)(ctx, source);
                             for param in params {
                                 ctx.bind_parameter(&param_ref_inner, &param);
@@ -318,9 +341,20 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                                 // match is found. That is only desirable if the
                                 // enclosing construct (e.g., a function) is the
                                 // thing being selected.
-                                result = result || (eval_func.extract)(ctx, source);
+                                let mut this_result = (eval_func.extract)(ctx, source);
+                                if this_result.value {
+                                    return this_result;
+                                }
+
+                                // These ranges are only used if *all* of the
+                                // arguments fail to satisfy the predicate
+                                collected_ranges.append(&mut this_result.ranges);
                             }
-                            result
+
+                            WithRanges {
+                                value: false,
+                                ranges: collected_ranges,
+                            }
                         }),
                     };
 
@@ -344,7 +378,13 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                 (NodeFilter::Predicate(lhs_p), NodeFilter::Predicate(rhs_p)) => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            (lhs_p.extract)(ctx, source) && (rhs_p.extract)(ctx, source)
+                            let lhs_res = (lhs_p.extract)(ctx, source);
+                            let rhs_res = (rhs_p.extract)(ctx, source);
+                            // If the result evaluates to false, we might want
+                            // to drop the ranges; however, it could be the case
+                            // that the result is later negated, so we shouldn't
+                            // assume that the ranges aren't relevant
+                            WithRanges::new(lhs_res.value && rhs_res.value, vec!(lhs_res.ranges, rhs_res.ranges))
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -362,7 +402,13 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                 (NodeFilter::Predicate(lhs_p), NodeFilter::Predicate(rhs_p)) => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx, source| {
-                            (lhs_p.extract)(ctx, source) || (rhs_p.extract)(ctx, source)
+                            let lhs_res = (lhs_p.extract)(ctx, source);
+                            // Short circuit if possible
+                            if lhs_res.value {
+                                lhs_res
+                            } else {
+                                (rhs_p.extract)(ctx, source)
+                            }
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -389,7 +435,12 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                         NodeFilter::ArgumentListComputation(arg_matcher) => {
                             let arg_count_matcher = NodeMatcher {
                                 extract: Rc::new(move |ctx, source| {
-                                    (arg_matcher.extract)(ctx, source).len() as i32
+                                    let vec_res = (arg_matcher.extract)(ctx, source);
+                                    // We discard the sub-ranges here because
+                                    // they aren't that interesting for this
+                                    // case, as it is just all arguments... That
+                                    // could easily be changed.
+                                    WithRanges::value(vec_res.len() as i32)
                                 }),
                             };
                             Ok(NodeFilter::NumericComputation(arg_count_matcher))

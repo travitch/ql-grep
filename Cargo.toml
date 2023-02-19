@@ -4,11 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ansi_term = "^0.12"
 anyhow = "^1"
 clap = { version = "^4.0", features = ["derive"] }
 combine = "^4.6"
 crossbeam-channel = "^0.5"
+gcollections = "^1.5"
 ignore = "^0.4"
+intervallum = "^1.4"
+is-terminal = "^0.4"
 knuffel = "^2"
 lazy_static = "^1.4"
 miette = { version = "^4.3", features=["fancy"] }
@@ -20,7 +24,6 @@ tracing = "^0.1"
 tracing-subscriber = { version = "^0.3", features = ["env-filter"]}
 thiserror = "^1"
 tree-sitter = "^0.20"
-tree-sitter-highlight = "^0.20"
 
 # Required for tree-sitter
 [build-dependencies]
