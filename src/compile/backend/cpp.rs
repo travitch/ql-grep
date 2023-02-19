@@ -17,12 +17,12 @@ impl CPPTreeInterface {
 }
 
 fn parse_include_string(s: &str) -> Option<Import> {
-    if s.starts_with("\"") {
-        let name = s.strip_prefix("\"").unwrap().strip_suffix("\"").unwrap();
+    if s.starts_with('"') {
+        let name = s.strip_prefix('"').unwrap().strip_suffix('"').unwrap();
         let imp = Import::IncludeLocal(name.into());
         Some(imp)
-    } else if s.starts_with("<") {
-        let name = s.strip_prefix("<").unwrap().strip_suffix(">").unwrap();
+    } else if s.starts_with('<') {
+        let name = s.strip_prefix('<').unwrap().strip_suffix('>').unwrap();
         let imp = Import::IncludeSystem(name.into());
         Some(imp)
     } else {
@@ -45,7 +45,7 @@ impl TreeInterface for CPPTreeInterface {
         }
     }
 
-    fn file_imports<'a>(&self, root: &Node, source: &'a [u8]) -> FileImportIndex {
+    fn file_imports(&self, root: &Node, source: &[u8]) -> FileImportIndex {
         let mut cur = tree_sitter::QueryCursor::new();
         let ql_query = "(preproc_include (_) @include)";
         let query = tree_sitter::Query::new(root.language(), ql_query)
@@ -78,14 +78,13 @@ impl TreeInterface for CPPTreeInterface {
                 let query = tree_sitter::Query::new(node.language(), ql_query)
                     .unwrap_or_else(|e| panic!("Error while querying arguments {e:?}"));
                 let qms = cur.matches(&query, *node, source);
-                let params = qms.enumerate()
+                qms.enumerate()
                     .map(|(idx, m)| {
                         let param_node = &m.captures[0].node;
                         let formal_argument = parameter_node_to_argument(param_node, source, idx);
                         WithRanges::new_single(formal_argument, param_node.range())
                     })
-                    .collect();
-                params
+                    .collect()
             }),
         };
         Some(matcher)
@@ -160,7 +159,7 @@ impl TreeInterface for CPPTreeInterface {
                     .unwrap_or_else(|e| panic!("Error while querying for errors {e:?}"));
                 let qms = cur.matches(&query, *node, source);
                 let ranges = qms.map(|m| m.captures[0].node.range()).collect::<Vec<_>>();
-                WithRanges::new(ranges.len() != 0, vec!(ranges))
+                WithRanges::new(!ranges.is_empty(), vec!(ranges))
             }),
         }
     }

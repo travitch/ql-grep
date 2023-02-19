@@ -32,7 +32,7 @@ impl TreeInterface for JavaTreeInterface {
         }
     }
 
-    fn file_imports<'a>(&self, root: &Node, source: &'a [u8]) -> FileImportIndex {
+    fn file_imports(&self, root: &Node, source: &[u8]) -> FileImportIndex {
         let mut cur = tree_sitter::QueryCursor::new();
         let ql_query = "(import_declaration (_) @import)";
         let query = tree_sitter::Query::new(root.language(), ql_query)
@@ -137,7 +137,7 @@ impl TreeInterface for JavaTreeInterface {
                 // We compute the number of matches against ranges instead of
                 // the query matches because the `map` operation consumes the
                 // iterator
-                WithRanges::new(ranges.len() != 0, vec!(ranges))
+                WithRanges::new(!ranges.is_empty(), vec!(ranges))
             }),
         }
     }

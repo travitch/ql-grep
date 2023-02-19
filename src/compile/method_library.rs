@@ -319,7 +319,7 @@ fn file_get_an_import<'a>(
     assert!(operands.is_empty());
     let comp = NodeListMatcher {
         extract: Rc::new(move |ctx, _source| {
-            Vec::from(ctx.imports().iter().cloned().map(|i| WithRanges::value(i)).collect::<Vec<_>>())
+            ctx.imports().iter().cloned().map(WithRanges::value).collect::<Vec<_>>()
         })
     };
     Ok(NodeFilter::ImportListComputation(comp))

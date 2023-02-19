@@ -35,7 +35,7 @@ pub trait QueryResultPrinter {
     /// Note that this is not a very clean abstraction because they meanings of
     /// some of the metadata change between printing layers. Therefore, this is
     /// not exposed outside of the module.
-    fn write_result<'a>(&self, bytes: &[u8], info: &'a HighlightInfo, w: &mut Box<dyn Write>) -> anyhow::Result<()>;
+    fn write_result(&self, bytes: &[u8], info: &HighlightInfo, w: &mut Box<dyn Write>) -> anyhow::Result<()>;
 }
 
 /// This backend writes the bytes directly to the given `Writer` without any
@@ -50,8 +50,8 @@ impl PlainWriter {
 }
 
 impl QueryResultPrinter for PlainWriter {
-    fn write_result<'a>(&self, bytes: &[u8], _info: &'a HighlightInfo, w: &mut Box<dyn Write>) -> anyhow::Result<()> {
-        w.write(bytes)?;
+    fn write_result(&self, bytes: &[u8], _info: &HighlightInfo, w: &mut Box<dyn Write>) -> anyhow::Result<()> {
+        w.write_all(bytes)?;
         Ok(())
     }
 }
@@ -110,7 +110,7 @@ fn split_slice_by_intervals<'a>(bytes: &'a [u8], base_offset: usize, highlight_i
 }
 
 impl QueryResultPrinter for ANSIWriter {
-    fn write_result<'a>(&self, bytes: &[u8], info: &'a HighlightInfo, w: &mut Box<dyn Write>) -> anyhow::Result<()> {
+    fn write_result(&self, bytes: &[u8], info: &HighlightInfo, w: &mut Box<dyn Write>) -> anyhow::Result<()> {
         // The interval set merges overlapping intervals, so we can aggressively
         // split lines based on any overlapping intervals
         let slices = split_slice_by_intervals(bytes, info.byte_offset, info.highlights);
@@ -118,7 +118,7 @@ impl QueryResultPrinter for ANSIWriter {
         for slice in slices {
             match slice {
                 HighlightSlices::Normal(normal_slice) => {
-                    w.write(normal_slice)?;
+                    w.write_all(normal_slice)?;
                 }
                 HighlightSlices::Highlighted(hslice) => {
                     let style = ansi_term::Style::new().bold();
@@ -147,7 +147,7 @@ impl LineNumberWriter {
 }
 
 impl QueryResultPrinter for LineNumberWriter {
-    fn write_result<'a>(&self, bytes: &[u8], info: &'a HighlightInfo, w: &mut Box<dyn Write>) -> anyhow::Result<()> {
+    fn write_result(&self, bytes: &[u8], info: &HighlightInfo, w: &mut Box<dyn Write>) -> anyhow::Result<()> {
         // Split the bytes into strings and delegate the printing of each one to
         // the inner writer.
         //
@@ -172,8 +172,8 @@ impl QueryResultPrinter for LineNumberWriter {
                     };
                     self.delegated_writer.write_result(line_bytes, &this_info, w)?;
                     // Insert a newline manually because we have trimmed them off
-                    writeln!(w, "")?;
-                    line_number = line_number + 1;
+                    writeln!(w)?;
+                    line_number += 1;
                     // We increase the byte offset by 1 to account for the newline.
                     //
                     // FIXME: This might need to account for Windows line endings
@@ -187,7 +187,7 @@ impl QueryResultPrinter for LineNumberWriter {
 }
 
 pub fn print_query_result(
-    printer: &Box<dyn QueryResultPrinter>,
+    printer: &dyn QueryResultPrinter,
     source_file: &SourceFile,
     qr: &QueryResult,
     w: &mut Box<dyn Write>,
@@ -218,7 +218,7 @@ pub fn print_query_result(
         }
     }
 
-    writeln!(w, "")?;
+    writeln!(w)?;
     Ok(())
 }
 

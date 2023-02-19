@@ -497,11 +497,11 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
 /// Query plans are language-specific (because the Tree Sitter grammar for each
 /// language is fairly different). Note that the caller should cache query plans
 /// to avoid recomputing them.
-pub fn compile_query<'a>(
+pub fn compile_query(
     lang: Language,
     ts_lang: tree_sitter::Language,
     tree_interface: Rc<dyn TreeInterface>,
-    query_plan: &'a QueryPlan,
+    query_plan: &QueryPlan,
 ) -> anyhow::Result<CompiledQuery> {
     // The basic idea is that we want to do as much processing as we can inside
     // of Tree Sitter's query language, as it will be the most efficient.

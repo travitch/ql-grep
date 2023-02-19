@@ -80,3 +80,9 @@ impl FileImportIndex {
         self.imports.as_slice()
     }
 }
+
+impl Default for FileImportIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}

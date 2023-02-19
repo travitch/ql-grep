@@ -449,7 +449,7 @@ pub fn typecheck_query(syntax: &Select<Syntax>) -> anyhow::Result<TypedQuery> {
     //
     // That might not technically be true because there are `as` operators to
     // bind names to intermediate values.  We may want to support those later.
-    let mut type_env = build_initial_type_environment(&syntax);
+    let mut type_env = build_initial_type_environment(syntax);
 
     // Type the selected expressions first, since they are `as` expressions that
     // could in principle bind new names
