@@ -215,6 +215,12 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(0);
     }
 
+    if let Some(shell) = args.print_shell_completions {
+        let mut cmd = cli::Cli::command();
+        clap_complete::generate::<clap_complete::Shell, String>(shell, &mut cmd, "qg".into(), &mut std::io::stdout());
+        std::process::exit(0);
+    }
+
     // Set up logging
     initialize_logging(&args.log_file)?;
 
