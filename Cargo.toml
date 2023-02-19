@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 ansi_term = "^0.12"
 anyhow = "^1"
-clap = { version = "^4.0", features = ["derive"] }
+clap = { version = "^4.1", features = ["derive"] }
 combine = "^4.6"
 crossbeam-channel = "^0.5"
 gcollections = "^1.5"
