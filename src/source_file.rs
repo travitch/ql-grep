@@ -29,9 +29,9 @@ pub enum Language {
 lazy_static! {
     /// A map of file extensions to their corresponding parsers
     static ref TREE_SITTER_LANGUAGES: HashMap<OsString, (tree_sitter::Language, Language)> = {
-        let c_lang = unsafe { tree_sitter_c() };
-        let cpp_lang = unsafe { tree_sitter_cpp() };
-        let java_lang = unsafe { tree_sitter_java() };
+        let c_lang = tree_sitter_c::language();
+        let cpp_lang = tree_sitter_cpp::language();
+        let java_lang = tree_sitter_java::language();
         // let python_lang = unsafe { tree_sitter_python() };
 
         let mut m = HashMap::new();
@@ -49,17 +49,6 @@ lazy_static! {
         m
     };
 }
-
-extern "C" {
-    fn tree_sitter_c() -> tree_sitter::Language;
-}
-extern "C" {
-    fn tree_sitter_cpp() -> tree_sitter::Language;
-}
-extern "C" {
-    fn tree_sitter_java() -> tree_sitter::Language;
-}
-// extern "C" { fn tree_sitter_python() -> tree_sitter::Language; }
 
 pub struct SourceFile {
     /// The original buffer for the source file
