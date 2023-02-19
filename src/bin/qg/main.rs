@@ -1,5 +1,5 @@
 use clap::Parser;
-use crossbeam_channel::{bounded, Sender};
+use crossbeam_channel::{bounded, Receiver, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 use is_terminal::IsTerminal;
 use std::fs::File;
@@ -19,7 +19,7 @@ mod cli;
 mod result_printer;
 
 /// Create a query result printer by parsing out the chosen command line arguments
-fn make_result_printer(args: &cli::Cli, is_term_connected: bool) -> Box<dyn result_printer::QueryResultPrinter> {
+fn make_result_printer(args: cli::Cli, is_term_connected: bool) -> Box<dyn result_printer::QueryResultPrinter> {
     let base_printer : Box<dyn result_printer::QueryResultPrinter> = if args.disable_ansi || !is_term_connected {
         Box::new(result_printer::PlainWriter::new())
     } else {
@@ -132,6 +132,38 @@ impl Statistics {
     }
 }
 
+fn spawn_accumulator_thread(
+    args: cli::Cli,
+    recv: Receiver<QueryResults>,
+) -> thread::JoinHandle<Statistics> {
+    thread::spawn(move || {
+        let mut stats = Statistics::new();
+        let mut output_dest : Box<dyn std::io::Write> = Box::new(std::io::stdout());
+        let result_writer = make_result_printer(args, std::io::stdout().is_terminal());
+
+        loop {
+            let item = recv.recv();
+            match item {
+                Err(_) => {
+                    break;
+                }
+                Ok(qr) => {
+                    stats.num_files_parsed += 1;
+                    stats.num_matches += qr.results.len();
+                    for res in qr.results {
+                        result_printer::print_query_result(&result_writer, &qr.source_file, &res, &mut output_dest)
+                            .unwrap_or_else(|e| {
+                                error!("Error while printing a result: {:?}", e);
+                            });
+                    }
+                }
+            }
+        }
+
+        stats
+    })
+}
+
 fn print_library() {
     println!("{LIBRARY_DATA}");
 }
@@ -197,32 +229,7 @@ fn main() -> anyhow::Result<()> {
 
     // Spawn a thread to collect all of the intermediate results produced by
     // worker threads over the channel.
-    let accumulator_handle = thread::spawn(move || {
-        let mut stats = Statistics::new();
-        let mut output_dest : Box<dyn std::io::Write> = Box::new(std::io::stdout());
-        let result_writer = make_result_printer(&args, std::io::stdout().is_terminal());
-
-        loop {
-            let item = recv.recv();
-            match item {
-                Err(_) => {
-                    break;
-                }
-                Ok(qr) => {
-                    stats.num_files_parsed += 1;
-                    stats.num_matches += qr.results.len();
-                    for res in qr.results {
-                        result_printer::print_query_result(&result_writer, &qr.source_file, &res, &mut output_dest)
-                            .unwrap_or_else(|e| {
-                                error!("Error while printing a result: {:?}", e);
-                            });
-                    }
-                }
-            }
-        }
-
-        stats
-    });
+    let accumulator_handle = spawn_accumulator_thread(args.clone(), recv);
 
     // Run in parallel, but reserve at least one core if the user has not
     // explicitly requested a number of threads to avoid totally drowning the
