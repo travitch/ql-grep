@@ -1,6 +1,7 @@
 use clap::Parser;
 use crossbeam_channel::{bounded, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
+use is_terminal::IsTerminal;
 use std::fs::File;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -18,8 +19,8 @@ mod cli;
 mod result_printer;
 
 /// Create a query result printer by parsing out the chosen command line arguments
-fn make_result_printer(args: &cli::Cli) -> Box<dyn result_printer::QueryResultPrinter> {
-    let base_printer : Box<dyn result_printer::QueryResultPrinter> = if args.disable_ansi {
+fn make_result_printer(args: &cli::Cli, is_term_connected: bool) -> Box<dyn result_printer::QueryResultPrinter> {
+    let base_printer : Box<dyn result_printer::QueryResultPrinter> = if args.disable_ansi || !is_term_connected {
         Box::new(result_printer::PlainWriter::new())
     } else {
         Box::new(result_printer::ANSIWriter::new())
@@ -188,7 +189,8 @@ fn main() -> anyhow::Result<()> {
     // worker threads over the channel.
     let accumulator_handle = thread::spawn(move || {
         let mut stats = Statistics::new();
-        let result_writer = make_result_printer(&args);
+        let mut output_dest : Box<dyn std::io::Write> = Box::new(std::io::stdout());
+        let result_writer = make_result_printer(&args, std::io::stdout().is_terminal());
 
         loop {
             let item = recv.recv();
@@ -200,7 +202,6 @@ fn main() -> anyhow::Result<()> {
                     stats.num_files_parsed += 1;
                     stats.num_matches += qr.results.len();
                     for res in qr.results {
-                        let mut output_dest : Box<dyn std::io::Write> = Box::new(std::io::stdout());
                         result_printer::print_query_result(&result_writer, &qr.source_file, &res, &mut output_dest)
                             .unwrap_or_else(|e| {
                                 error!("Error while printing a result: {:?}", e);
