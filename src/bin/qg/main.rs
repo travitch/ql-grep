@@ -12,7 +12,7 @@ use tracing_subscriber::FmtSubscriber;
 
 use ql_grep::{
     compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query, QueryPlan, QueryResult, Select,
-    SourceFile, Syntax, TreeInterface, TypedQuery, LIBRARY_DATA,
+    SourceError, SourceFile, Syntax, TreeInterface, TypedQuery, LIBRARY_DATA,
 };
 
 mod cli;
@@ -82,7 +82,17 @@ fn visit_file(
         Ok(dir_ent) => {
             match SourceFile::new(dir_ent.path()) {
                 Err(err) => {
-                    info!("While parsing {}, {}", dir_ent.path().display(), err);
+                    match err.downcast_ref::<SourceError>() {
+                        Some(SourceError::MissingExtension(p)) => {
+                            // Don't bother warning if the path is a directory
+                            if !p.is_dir() {
+                                info!("No extension for file {}", p.as_path().display());
+                            }
+                        }
+                        _ => {
+                            info!("While parsing {}, {}", dir_ent.path().display(), err);
+                        }
+                    }
                 }
                 Ok((sf, ast)) => {
                     let mut res_storage = Vec::new();
