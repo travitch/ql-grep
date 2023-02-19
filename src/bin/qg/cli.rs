@@ -23,4 +23,6 @@ pub struct Cli {
     pub print_query_ir: bool,
     #[arg(long, help = "Suppress ANSI terminal output when writing matches to the terminal")]
     pub disable_ansi: bool,
+    #[arg(long, help = "Print out a man page (in ROFF format) that can be saved on the user's MANPATH")]
+    pub print_manpage: bool,
 }
