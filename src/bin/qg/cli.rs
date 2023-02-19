@@ -1,7 +1,7 @@
 use clap::{arg, Parser};
 use std::path::PathBuf;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 #[command(name = "qg")]
 #[command(about = "A grep for source code built on tree-sitter", long_about = None)]
 pub struct Cli {
