@@ -7,6 +7,7 @@ edition = "2021"
 ansi_term = "^0.12"
 anyhow = "^1"
 clap = { version = "^4.1", features = ["derive"] }
+clap_mangen = "^0.2"
 combine = "^4.6"
 crossbeam-channel = "^0.5"
 gcollections = "^1.5"

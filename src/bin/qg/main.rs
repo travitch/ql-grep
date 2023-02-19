@@ -1,8 +1,9 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 use is_terminal::IsTerminal;
 use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Mutex;
@@ -203,6 +204,14 @@ fn main() -> anyhow::Result<()> {
 
     if args.print_library {
         print_library();
+        std::process::exit(0);
+    }
+
+    if args.print_manpage {
+        let manpage = clap_mangen::Man::new(cli::Cli::command());
+        let mut buffer = Vec::new();
+        manpage.render(&mut buffer)?;
+        std::io::stdout().write(buffer.as_slice())?;
         std::process::exit(0);
     }
 
