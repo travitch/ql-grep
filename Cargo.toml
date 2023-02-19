@@ -24,6 +24,9 @@ tracing = "^0.1"
 tracing-subscriber = { version = "^0.3", features = ["env-filter"]}
 thiserror = "^1"
 tree-sitter = "^0.20"
+tree-sitter-c = "^0.20"
+tree-sitter-cpp = "^0.20"
+tree-sitter-java = "^0.20"
 
 # Required for tree-sitter
 [build-dependencies]
