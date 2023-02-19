@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Mutex;
 use std::thread;
-use tracing::{error, info, warn, Level};
+use tracing::{error, info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use ql_grep::{
@@ -15,6 +15,22 @@ use ql_grep::{
 };
 
 mod cli;
+mod result_printer;
+
+/// Create a query result printer by parsing out the chosen command line arguments
+fn make_result_printer(args: &cli::Cli) -> Box<dyn result_printer::QueryResultPrinter> {
+    let base_printer : Box<dyn result_printer::QueryResultPrinter> = if args.disable_ansi {
+        Box::new(result_printer::PlainWriter::new())
+    } else {
+        Box::new(result_printer::ANSIWriter::new())
+    };
+
+    if args.number_lines {
+        return Box::new(result_printer::LineNumberWriter::new(base_printer))
+    }
+
+    base_printer
+}
 
 /// Parse a query provided as either a literal string or a path to a file on
 /// disk
@@ -105,49 +121,6 @@ impl Statistics {
     }
 }
 
-struct FormatOptions {
-    number_lines: bool,
-}
-
-/// Print this result to the console
-///
-/// Results go to standard out rather than the logs, as logs should be able to
-/// be redirected separately.
-fn print_match(fmt_opts: &FormatOptions, sf: &SourceFile, qr: &QueryResult) {
-    match qr {
-        QueryResult::Constant(v) => {
-            println!("{}", sf.file_path.display());
-            println!("  {v:?}");
-        }
-        QueryResult::Node(rng) => {
-            println!(
-                "{}:{}-{}",
-                sf.file_path.display(),
-                rng.start_point.row,
-                rng.end_point.row
-            );
-            let all_bytes = sf.source.as_bytes();
-            let slice = &all_bytes[rng.start_byte..rng.end_byte];
-            match std::str::from_utf8(slice) {
-                Err(_) => {
-                    warn!("Error decoding string");
-                }
-                Ok(s) => {
-                    if !fmt_opts.number_lines {
-                        println!("{s}");
-                    } else {
-                        let mut line_num = rng.start_point.row;
-                        for line in s.lines() {
-                            println!("{line_num} {line}");
-                            line_num += 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 fn print_library() {
     println!("{LIBRARY_DATA}");
 }
@@ -193,12 +166,12 @@ fn main() -> anyhow::Result<()> {
     // Set up logging
     initialize_logging(&args.log_file)?;
 
-    let fmt_opts = FormatOptions {
-        number_lines: args.number_lines,
-    };
+    let thread_count = args.num_threads
+        .clone()
+        .unwrap_or(std::cmp::max(1, num_cpus::get()) - 1);
 
     let cwd = std::env::current_dir()?;
-    let root_dir = args.root.unwrap_or(cwd);
+    let root_dir = args.root.clone().unwrap_or(cwd);
 
     let query = make_query(&args.query_string, &args.query_path)?;
     let typed_query = typecheck_query(&query)?;
@@ -215,6 +188,7 @@ fn main() -> anyhow::Result<()> {
     // worker threads over the channel.
     let accumulator_handle = thread::spawn(move || {
         let mut stats = Statistics::new();
+        let result_writer = make_result_printer(&args);
 
         loop {
             let item = recv.recv();
@@ -226,7 +200,11 @@ fn main() -> anyhow::Result<()> {
                     stats.num_files_parsed += 1;
                     stats.num_matches += qr.results.len();
                     for res in qr.results {
-                        print_match(&fmt_opts, &qr.source_file, &res);
+                        let mut output_dest : Box<dyn std::io::Write> = Box::new(std::io::stdout());
+                        result_printer::print_query_result(&result_writer, &qr.source_file, &res, &mut output_dest)
+                            .unwrap_or_else(|e| {
+                                error!("Error while printing a result: {:?}", e);
+                            });
                     }
                 }
             }
@@ -239,7 +217,7 @@ fn main() -> anyhow::Result<()> {
     // explicitly requested a number of threads to avoid totally drowning the
     // system
     WalkBuilder::new(root_dir)
-        .threads(args.num_threads.unwrap_or(std::cmp::max(1, num_cpus::get()) - 1))
+        .threads(thread_count)
         .build_parallel()
         .run(|| {
             let q = &query_plan;

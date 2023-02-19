@@ -5,6 +5,7 @@ use tree_sitter::Node;
 use crate::compile::interface::*;
 use crate::preprocess::{FileImportIndex, Import};
 use crate::query::val_type::Type;
+use crate::with_ranges::WithRanges;
 
 pub struct JavaTreeInterface {}
 
@@ -54,19 +55,23 @@ impl TreeInterface for JavaTreeInterface {
     fn callable_arguments(
         &self,
         base: &NodeMatcher<CallableRef>,
-    ) -> Option<NodeMatcher<Vec<FormalArgument>>> {
+    ) -> Option<NodeListMatcher<FormalArgument>> {
         let x = Rc::clone(&base.extract);
-        let matcher = NodeMatcher {
+        let matcher = NodeListMatcher {
             extract: Rc::new(move |ctx, source| {
                 let callable_ref = x(ctx, source);
-                let node = ctx.lookup_callable(&callable_ref);
+                let node = ctx.lookup_callable(&callable_ref.value);
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(formal_parameter) @parameter";
                 let query = tree_sitter::Query::new(node.language(), ql_query)
                     .unwrap_or_else(|e| panic!("Error while querying arguments {e:?}"));
                 let qms = cur.matches(&query, *node, source);
                 qms.enumerate()
-                    .map(|(idx, m)| parameter_node_to_argument(&m.captures[0].node, source, idx))
+                    .map(|(idx, m)| {
+                        let param_node = &m.captures[0].node;
+                        let formal_argument = parameter_node_to_argument(param_node, source, idx);
+                        WithRanges::new_single(formal_argument, param_node.range())
+                    })
                     .collect()
             }),
         };
@@ -78,14 +83,16 @@ impl TreeInterface for JavaTreeInterface {
         let matcher = NodeMatcher {
             extract: Rc::new(move |ctx, source| {
                 let callable_ref = x(ctx, source);
-                let node = ctx.lookup_callable(&callable_ref);
+                let node = ctx.lookup_callable(&callable_ref.value);
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(method_declaration (identifier) @method.name)";
                 let query = tree_sitter::Query::new(node.language(), ql_query)
                     .unwrap_or_else(|e| panic!("Error while querying name {e:?}"));
                 let mut qms = cur.matches(&query, *node, source);
                 let m = qms.next().unwrap();
-                callable_name_node_to_string(&m.captures[0].node, source)
+                let name_node = &m.captures[0].node;
+                let name_string = callable_name_node_to_string(name_node, source);
+                WithRanges::new_single(name_string, name_node.range())
             }),
         };
         Some(matcher)
@@ -96,14 +103,18 @@ impl TreeInterface for JavaTreeInterface {
         let matcher = NodeMatcher {
             extract: Rc::new(move |ctx, source| {
                 let callable_ref = get_callable_ref(ctx, source);
-                let node = ctx.lookup_callable(&callable_ref);
+                // NOTE: We discard the ranges for the callable because
+                // highlighting an entire function body is not very useful
+                let node = ctx.lookup_callable(&callable_ref.value);
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(method_declaration type: (_) @ty)";
                 let query = tree_sitter::Query::new(node.language(), ql_query)
                     .unwrap_or_else(|e| panic!("Error while querying for return types {e:?}"));
                 let mut qms = cur.matches(&query, *node, source);
                 let m = qms.next().unwrap();
-                parse_type_node(&m.captures[0].node, source)
+                let type_node = &m.captures[0].node;
+                let lang = parse_type_node(type_node, source);
+                WithRanges::new_single(lang, type_node.range())
             }),
         };
         Some(matcher)
@@ -114,13 +125,19 @@ impl TreeInterface for JavaTreeInterface {
         NodeMatcher {
             extract: Rc::new(move |ctx, source| {
                 let callable_ref = get_callable_ref(ctx, source);
-                let node = ctx.lookup_callable(&callable_ref);
+                // NOTE: We discard the ranges for callables because
+                // highlighting an entire function is not very useful
+                let node = ctx.lookup_callable(&callable_ref.value);
                 let mut cur = tree_sitter::QueryCursor::new();
                 let ql_query = "(method_declaration body: (_ (ERROR) @err))";
                 let query = tree_sitter::Query::new(node.language(), ql_query)
                     .unwrap_or_else(|e| panic!("Error while querying for errors {e:?}"));
                 let qms = cur.matches(&query, *node, source);
-                qms.count() != 0
+                let ranges = qms.map(|m| m.captures[0].node.range()).collect::<Vec<_>>();
+                // We compute the number of matches against ranges instead of
+                // the query matches because the `map` operation consumes the
+                // iterator
+                WithRanges::new(ranges.len() != 0, vec!(ranges))
             }),
         }
     }

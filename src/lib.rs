@@ -5,6 +5,7 @@ mod plan;
 mod preprocess;
 mod query;
 mod source_file;
+mod with_ranges;
 
 pub use crate::compile::backend::make_tree_interface;
 pub use crate::compile::compile_query;

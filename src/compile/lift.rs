@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::compile::interface::{LanguageType, NodeMatcher};
+use crate::compile::interface::{LanguageType, NodeMatcher, NodeListMatcher};
 use crate::compile::node_filter::NodeFilter;
 use crate::query::val_type::Type;
 
@@ -38,11 +38,11 @@ fn as_type(nf: NodeFilter) -> NodeMatcher<LanguageType> {
 /// 3. Extract the single result at the expected type and append it to the
 ///    result collection
 fn transform_body<From, To, W, F, X>(
-    base_elts: &NodeMatcher<Vec<From>>,
+    base_elts: &NodeListMatcher<From>,
     wrap_one: W,
     extract_one: F,
     transformer: Rc<X>,
-) -> NodeMatcher<Vec<To>>
+) -> NodeListMatcher<To>
 where
     From: Clone + 'static,
     W: Fn(NodeMatcher<From>) -> NodeFilter + 'static,
@@ -52,7 +52,7 @@ where
     let xfrm = Rc::clone(&transformer);
     let args_extract = Rc::clone(&base_elts.extract);
 
-    NodeMatcher {
+    NodeListMatcher {
         extract: Rc::new(move |ctx, source| {
             let mut res = Vec::new();
 

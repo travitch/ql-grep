@@ -4,6 +4,7 @@ use tree_sitter::Node;
 
 use crate::preprocess::{FileImportIndex, Import};
 use crate::query::val_type::Type;
+use crate::with_ranges::WithRanges;
 
 pub struct TopLevelMatcher {
     /// The Tree Sitter query to match the given "top-level" structure
@@ -76,7 +77,7 @@ pub struct EvaluationContext<'a> {
     /// evaluation
     callables: HashMap<CallableRef, Node<'a>>,
     /// All of the parsed parameters for the given function
-    parameters: HashMap<ParameterRef, FormalArgument>,
+    parameters: HashMap<ParameterRef, WithRanges<FormalArgument>>,
     /// The index of the imports in the current file
     ///
     /// This is an `Option` to distinguish the case of "did not run the
@@ -115,11 +116,11 @@ impl<'a> EvaluationContext<'a> {
         }
     }
 
-    pub fn lookup_parameter(&self, pr: &ParameterRef) -> &FormalArgument {
+    pub fn lookup_parameter(&self, pr: &ParameterRef) -> &WithRanges<FormalArgument> {
         self.parameters.get(pr).unwrap()
     }
 
-    pub fn bind_parameter(&mut self, pr: &ParameterRef, param: &FormalArgument) {
+    pub fn bind_parameter(&mut self, pr: &ParameterRef, param: &WithRanges<FormalArgument>) {
         self.parameters.insert(pr.clone(), param.clone());
     }
 
@@ -144,12 +145,15 @@ impl<'a> EvaluationContext<'a> {
 ///
 /// For example, a query might select argument nodes and the matcher could
 /// extract a list of argument structures.
-///
-/// FIXME: Add another field that records ranges to highlight in results (i.e.,
-/// the code that contributes to a Node being included)
 pub struct NodeMatcher<R> {
-    pub extract: Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> R>,
+    pub extract: Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> WithRanges<R>>,
 }
+
+/// A variant of `NodeMatcher` for sequences/relations
+pub struct NodeListMatcher<R> {
+    pub extract: Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> Vec<WithRanges<R>>>,
+}
+
 
 /// A representation of language-level types (e.g., Java or C types)
 ///
@@ -209,7 +213,7 @@ pub trait TreeInterface {
     fn callable_arguments(
         &self,
         node: &NodeMatcher<CallableRef>,
-    ) -> Option<NodeMatcher<Vec<FormalArgument>>>;
+    ) -> Option<NodeListMatcher<FormalArgument>>;
 
     /// A node matcher that extracts the name of a callable node.
     ///

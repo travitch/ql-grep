@@ -4,12 +4,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::compile::errors::PlanError;
-use crate::compile::interface::{LanguageType, NodeMatcher, TreeInterface};
+use crate::compile::interface::{LanguageType, NodeMatcher, NodeListMatcher, TreeInterface};
 use crate::compile::NodeFilter;
 use crate::library::index::{library_index, MethodSignature};
 use crate::library::Status;
 use crate::query::ir::*;
 use crate::query::val_type::Type;
+use crate::with_ranges::WithRanges;
 
 /// A handler for method calls (qualified accesses) in the planner
 ///
@@ -178,7 +179,7 @@ fn string_regexp_match<'a>(
     let comp = NodeMatcher {
         extract: Rc::new(move |ctx, source| {
             let matched_string = x(ctx, source);
-            rx.is_match(matched_string.as_ref())
+            WithRanges::new(rx.is_match(matched_string.value.as_ref()), vec!(matched_string.ranges))
         }),
     };
     Ok(NodeFilter::Predicate(comp))
@@ -199,7 +200,11 @@ fn parameter_get_name<'a>(
             let x = Rc::clone(&c.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
-                    x(ctx, source).name.unwrap_or_else(|| "<none>".into())
+                    let parameter_result = x(ctx, source);
+                    WithRanges::new(
+                        parameter_result.value.name.unwrap_or_else(|| "<none>".into()),
+                        vec!(parameter_result.ranges)
+                    )
                 }),
             };
             Ok(NodeFilter::StringComputation(comp))
@@ -228,7 +233,8 @@ fn parameter_get_type<'a>(
                     // FIXME: Probably want to have a better (i.e., more
                     // structured) representation if the type is missing
                     let default_ty = LanguageType::new("<Any>");
-                    x(ctx, source).declared_type.unwrap_or(default_ty)
+                    let parameter_result = x(ctx, source);
+                    WithRanges::new(parameter_result.value.declared_type.unwrap_or(default_ty), vec!(parameter_result.ranges))
                 }),
             };
 
@@ -255,7 +261,8 @@ fn parameter_get_index<'a>(
             let x = Rc::clone(&c.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
-                    x(ctx, source).index as i32
+                    let argument_result = x(ctx, source);
+                    WithRanges::new(argument_result.value.index as i32, vec!(argument_result.ranges))
                 })
             };
             Ok(NodeFilter::NumericComputation(comp))
@@ -280,7 +287,10 @@ fn type_get_name<'a>(
         NodeFilter::TypeComputation(tc) => {
             let x = Rc::clone(&tc.extract);
             let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| x(ctx, source).as_type_string()),
+                extract: Rc::new(move |ctx, source| {
+                    let type_result = x(ctx, source);
+                    WithRanges::new(type_result.value.as_type_string(), vec!(type_result.ranges))
+                }),
             };
 
             Ok(NodeFilter::StringComputation(comp))
@@ -307,9 +317,9 @@ fn file_get_an_import<'a>(
     operands: &'a Vec<Expr<Typed>>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
-    let comp = NodeMatcher {
+    let comp = NodeListMatcher {
         extract: Rc::new(move |ctx, _source| {
-            Vec::from(ctx.imports())
+            Vec::from(ctx.imports().iter().cloned().map(|i| WithRanges::value(i)).collect::<Vec<_>>())
         })
     };
     Ok(NodeFilter::ImportListComputation(comp))
@@ -326,7 +336,8 @@ fn import_get_name<'a>(
             let get_import = Rc::clone(&c.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
-                    get_import(ctx, source).to_string()
+                    let import_res = get_import(ctx, source);
+                    WithRanges::new(import_res.value.to_string(), vec!(import_res.ranges))
                 })
             };
             Ok(NodeFilter::StringComputation(comp))

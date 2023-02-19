@@ -1,21 +1,21 @@
-use crate::compile::interface::{CallableRef, FormalArgument, LanguageType, NodeMatcher};
+use crate::compile::interface::{CallableRef, FormalArgument, LanguageType, NodeMatcher, NodeListMatcher};
 use crate::preprocess::Import;
 use crate::query::ir::CachedRegex;
 
 pub enum NodeFilter {
     Predicate(NodeMatcher<bool>),
-    PredicateListComputation(NodeMatcher<Vec<bool>>),
+    PredicateListComputation(NodeListMatcher<bool>),
     TypeComputation(NodeMatcher<LanguageType>),
-    TypeListComputation(NodeMatcher<Vec<LanguageType>>),
+    TypeListComputation(NodeListMatcher<LanguageType>),
     NumericComputation(NodeMatcher<i32>),
     StringComputation(NodeMatcher<String>),
-    StringListComputation(NodeMatcher<Vec<String>>),
+    StringListComputation(NodeListMatcher<String>),
     RegexComputation(NodeMatcher<CachedRegex>),
     CallableComputation(NodeMatcher<CallableRef>),
     ArgumentComputation(NodeMatcher<FormalArgument>),
-    ArgumentListComputation(NodeMatcher<Vec<FormalArgument>>),
+    ArgumentListComputation(NodeListMatcher<FormalArgument>),
     ImportComputation(NodeMatcher<Import>),
-    ImportListComputation(NodeMatcher<Vec<Import>>),
+    ImportListComputation(NodeListMatcher<Import>),
     /// Currently it is not possible to reference other files during evaluation
     /// (and it is unlikely that it ever will be possible), so no real
     /// information is required during evaluation (the File reference is in the
