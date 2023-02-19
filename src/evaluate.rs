@@ -120,7 +120,13 @@ pub fn evaluate_plan<'a>(
 ) -> anyhow::Result<Vec<QueryResult>> {
     // FIXME: Add rich error reporting here, with supportive logging in the main driver that consumes these results
     let mut eval_ctx = EvaluationContext::new();
-    preprocess_file(&plan.file_preprocessing, ast, target.source.as_bytes(), tree_interface, &mut eval_ctx);
+    preprocess_file(
+        &plan.file_preprocessing,
+        ast,
+        target.source.as_bytes(),
+        tree_interface,
+        &mut eval_ctx,
+    );
     let mut matches = Vec::new();
     match &plan.steps {
         QueryAction::ConstantValue(v) => {

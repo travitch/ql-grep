@@ -8,8 +8,8 @@ use test_generator::test_resources;
 use toml::de;
 
 use ql_grep::{
-    compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query, QueryResult,
-    SourceFile, TypedQuery,
+    compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query,
+    QueryResult, SourceFile, TypedQuery,
 };
 
 /// A single test case to run ql-grep over, with expected results
@@ -60,13 +60,24 @@ fn visit_file(
                 // query is not supported for all target languages.  The
                 // expected results will let us know if the failure is
                 // unexpected.
-                match compile_query(sf.lang, ast.language(), Rc::clone(&tree_interface), &query_plan) {
+                match compile_query(
+                    sf.lang,
+                    ast.language(),
+                    Rc::clone(&tree_interface),
+                    &query_plan,
+                ) {
                     Ok(compiled_query) => {
-                        let mut result = evaluate_plan(&sf, &ast, Rc::clone(&tree_interface), &mut cursor, &compiled_query).unwrap();
+                        let mut result = evaluate_plan(
+                            &sf,
+                            &ast,
+                            Rc::clone(&tree_interface),
+                            &mut cursor,
+                            &compiled_query,
+                        )
+                        .unwrap();
                         res_storage.append(&mut result);
-                    },
-                    Err(_) => {
                     }
+                    Err(_) => {}
                 }
             }
             // Send the result to the aggregation thread

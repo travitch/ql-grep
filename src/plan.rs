@@ -11,8 +11,8 @@ use std::collections::HashSet;
 use crate::library::index::library_index;
 use crate::preprocess::FilePreprocessingPass;
 use crate::query::ir::{AsExpr, EqualityOp, Expr, Expr_, Typed, VarDecl};
-use crate::query::val_type::Type;
 use crate::query::typecheck::TypedQuery;
+use crate::query::val_type::Type;
 
 #[cfg(test)]
 use crate::query::ir::Constant;
@@ -109,30 +109,35 @@ fn match_binder_form(
     e: &Expr<Typed>,
 ) -> anyhow::Result<Option<(VarDecl, Box<Expr<Typed>>, Box<Expr<Typed>>)>> {
     match &e.expr {
-        Expr_::LogicalConjunction { lhs: log_lhs, rhs: log_rhs } => match &log_lhs.expr {
-            Expr_::EqualityComparison { lhs: eq_lhs, op, rhs: eq_rhs } => {
-                match (&eq_lhs.expr, op, &eq_rhs.expr) {
-                    (Expr_::VarRef(name), EqualityOp::EQ, Expr_::QualifiedAccess { .. }) => {
-                        let access_b = insert_explicit_binders(eq_rhs)?;
-                        let var_decl = VarDecl {
-                            name: name.clone(),
-                            type_: eq_lhs.type_.clone(),
-                        };
-                        let eval_expr = insert_explicit_binders(log_rhs)?;
-                        Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
-                    }
-                    (Expr_::QualifiedAccess { .. }, EqualityOp::EQ, Expr_::VarRef(name)) => {
-                        let access_b = insert_explicit_binders(eq_lhs)?;
-                        let var_decl = VarDecl {
-                            name: name.clone(),
-                            type_: eq_lhs.type_.clone(),
-                        };
-                        let eval_expr = insert_explicit_binders(log_rhs)?;
-                        Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
-                    }
-                    _ => Ok(None),
+        Expr_::LogicalConjunction {
+            lhs: log_lhs,
+            rhs: log_rhs,
+        } => match &log_lhs.expr {
+            Expr_::EqualityComparison {
+                lhs: eq_lhs,
+                op,
+                rhs: eq_rhs,
+            } => match (&eq_lhs.expr, op, &eq_rhs.expr) {
+                (Expr_::VarRef(name), EqualityOp::EQ, Expr_::QualifiedAccess { .. }) => {
+                    let access_b = insert_explicit_binders(eq_rhs)?;
+                    let var_decl = VarDecl {
+                        name: name.clone(),
+                        type_: eq_lhs.type_.clone(),
+                    };
+                    let eval_expr = insert_explicit_binders(log_rhs)?;
+                    Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
                 }
-            }
+                (Expr_::QualifiedAccess { .. }, EqualityOp::EQ, Expr_::VarRef(name)) => {
+                    let access_b = insert_explicit_binders(eq_lhs)?;
+                    let var_decl = VarDecl {
+                        name: name.clone(),
+                        type_: eq_lhs.type_.clone(),
+                    };
+                    let eval_expr = insert_explicit_binders(log_rhs)?;
+                    Ok(Some((var_decl, Box::new(access_b), Box::new(eval_expr))))
+                }
+                _ => Ok(None),
+            },
             _ => Ok(None),
         },
         _ => Ok(None),
@@ -155,7 +160,7 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
                 expr: Expr_::Bind {
                     bound_var: var_decl,
                     relation_expr: access_b,
-                    evaluated_expr: eval_expr
+                    evaluated_expr: eval_expr,
                 },
                 type_: Type::PrimBoolean,
             };
@@ -171,7 +176,7 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
                 expr: Expr_::EqualityComparison {
                     lhs: Box::new(lhs_b),
                     op: *op,
-                    rhs: Box::new(rhs_b)
+                    rhs: Box::new(rhs_b),
                 },
                 type_: e.type_.clone(),
             };
@@ -219,7 +224,11 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
             };
             Ok(e_b)
         }
-        Expr_::QualifiedAccess { base, method_name, operands } => {
+        Expr_::QualifiedAccess {
+            base,
+            method_name,
+            operands,
+        } => {
             let base_b = insert_explicit_binders(base)?;
             let mut args_b = Vec::new();
             for arg in operands.iter() {
@@ -251,7 +260,10 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
             }
 
             let e_b = Expr {
-                expr: Expr_::Aggregate { op: *op, operands: args_b },
+                expr: Expr_::Aggregate {
+                    op: *op,
+                    operands: args_b,
+                },
                 type_: e.type_.clone(),
             };
             Ok(e_b)
@@ -279,29 +291,32 @@ pub fn plan_query(typed_query: &TypedQuery) -> anyhow::Result<QueryPlan> {
 
 impl QueryPlan {
     pub fn to_doc(&self) -> RcDoc<()> {
-        let from = RcDoc::text("from ")
-            .append(RcDoc::intersperse(self.var_decls.iter().map(|v| {
+        let from = RcDoc::text("from ").append(RcDoc::intersperse(
+            self.var_decls.iter().map(|v| {
                 let doc = RcDoc::as_string(&v.type_)
                     .append(RcDoc::space())
                     .append(RcDoc::as_string(&v.name));
                 parens(doc)
-            }), RcDoc::space()));
-        let select = RcDoc::text("select ")
-            .append(RcDoc::intersperse(self.selected_exprs.iter().map(|e| {
-                e.expr.to_doc()
-            }), RcDoc::space()));
-        let root = RcDoc::text("root ")
-            .append(RcDoc::as_string(&self.root_var.name));
-        parens(RcDoc::text("query")
-            .append(RcDoc::hardline())
-            .append(parens(from)
-                .append(RcDoc::hardline())
-                .append(self.where_formula.to_doc())
-                .append(RcDoc::hardline())
-                .append(parens(select))
-                .append(RcDoc::hardline())
-                .append(parens(root))
-                .nest(2)))
+            }),
+            RcDoc::space(),
+        ));
+        let select = RcDoc::text("select ").append(RcDoc::intersperse(
+            self.selected_exprs.iter().map(|e| e.expr.to_doc()),
+            RcDoc::space(),
+        ));
+        let root = RcDoc::text("root ").append(RcDoc::as_string(&self.root_var.name));
+        parens(
+            RcDoc::text("query").append(RcDoc::hardline()).append(
+                parens(from)
+                    .append(RcDoc::hardline())
+                    .append(self.where_formula.to_doc())
+                    .append(RcDoc::hardline())
+                    .append(parens(select))
+                    .append(RcDoc::hardline())
+                    .append(parens(root))
+                    .nest(2),
+            ),
+        )
     }
 
     pub fn to_pretty(&self, width: usize) -> String {
@@ -312,9 +327,7 @@ impl QueryPlan {
 }
 
 fn parens(d: RcDoc<()>) -> RcDoc<()> {
-    RcDoc::text("(")
-        .append(d)
-        .append(RcDoc::text(")"))
+    RcDoc::text("(").append(d).append(RcDoc::text(")"))
 }
 
 #[test]
@@ -338,7 +351,7 @@ fn rewrites_simple_binders() {
         expr: Expr_::QualifiedAccess {
             base: Box::new(method_ref),
             method_name: "getAParameter".into(),
-            operands: Vec::new()
+            operands: Vec::new(),
         },
         type_: Type::Relational(Box::new(Type::Parameter)),
     };
@@ -347,7 +360,11 @@ fn rewrites_simple_binders() {
         type_: Type::Parameter,
     };
     let get_name_expr = Expr {
-        expr: Expr_::QualifiedAccess { base: Box::new(param_ref), method_name: "getName".into(), operands: Vec::new() },
+        expr: Expr_::QualifiedAccess {
+            base: Box::new(param_ref),
+            method_name: "getName".into(),
+            operands: Vec::new(),
+        },
         type_: Type::PrimString,
     };
     let log_string_expr = Expr {
@@ -366,7 +383,7 @@ fn rewrites_simple_binders() {
         expr: Expr_::Bind {
             bound_var: var_decl,
             relation_expr: Box::new(bound_val),
-            evaluated_expr: Box::new(eval_expr)
+            evaluated_expr: Box::new(eval_expr),
         },
         type_: Type::PrimBoolean,
     };

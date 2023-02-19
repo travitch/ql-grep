@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::compile::interface::{LanguageType, NodeMatcher, NodeListMatcher};
+use crate::compile::interface::{LanguageType, NodeListMatcher, NodeMatcher};
 use crate::compile::node_filter::NodeFilter;
 use crate::query::val_type::Type;
 

@@ -134,8 +134,9 @@ impl<'a> EvaluationContext<'a> {
     }
 
     pub fn imports(&self) -> &[Import] {
-        let idx = self.file_imports.as_ref()
-            .unwrap_or_else(|| panic!("The query plan required a computed FileImportIndex, but it was not available"));
+        let idx = self.file_imports.as_ref().unwrap_or_else(|| {
+            panic!("The query plan required a computed FileImportIndex, but it was not available")
+        });
         idx.imports()
     }
 }
@@ -157,9 +158,9 @@ pub struct NodeMatcher<R> {
 
 /// A variant of `NodeMatcher` for sequences/relations
 pub struct NodeListMatcher<R> {
-    pub extract: Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> Vec<WithRanges<R>>>,
+    pub extract:
+        Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> Vec<WithRanges<R>>>,
 }
-
 
 /// A representation of language-level types (e.g., Java or C types)
 ///
@@ -232,5 +233,8 @@ pub trait TreeInterface {
     fn callable_has_parse_error(&self, node: &NodeMatcher<CallableRef>) -> NodeMatcher<bool>;
 
     /// Returns the return type of the callable
-    fn callable_return_type(&self, node: &NodeMatcher<CallableRef>) -> Option<NodeMatcher<LanguageType>>;
+    fn callable_return_type(
+        &self,
+        node: &NodeMatcher<CallableRef>,
+    ) -> Option<NodeMatcher<LanguageType>>;
 }

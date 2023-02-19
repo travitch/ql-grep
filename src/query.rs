@@ -232,7 +232,10 @@ fn select_filter_parameter_count() {
     };
     let mut agg_exprs = Vec::new();
     agg_exprs.push(agg_body);
-    let lhs = untyped(Expr_::Aggregate { op: AggregateOp::Count, operands: agg_exprs });
+    let lhs = untyped(Expr_::Aggregate {
+        op: AggregateOp::Count,
+        operands: agg_exprs,
+    });
     let rhs = untyped(Expr_::ConstantExpr(Constant::Integer(5)));
     let cmp = untyped(Expr_::RelationalComparison {
         lhs: Box::new(lhs),

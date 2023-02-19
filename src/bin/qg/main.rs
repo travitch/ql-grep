@@ -12,23 +12,28 @@ use tracing::{error, info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use ql_grep::{
-    compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query, QueryPlan, QueryResult, Select,
-    SourceError, SourceFile, Syntax, TreeInterface, TypedQuery, LIBRARY_DATA,
+    compile_query, evaluate_plan, make_tree_interface, parse_query, plan_query, typecheck_query,
+    QueryPlan, QueryResult, Select, SourceError, SourceFile, Syntax, TreeInterface, TypedQuery,
+    LIBRARY_DATA,
 };
 
 mod cli;
 mod result_printer;
 
 /// Create a query result printer by parsing out the chosen command line arguments
-fn make_result_printer(args: cli::Cli, is_term_connected: bool) -> Box<dyn result_printer::QueryResultPrinter> {
-    let base_printer : Box<dyn result_printer::QueryResultPrinter> = if args.disable_ansi || !is_term_connected {
-        Box::new(result_printer::PlainWriter::new())
-    } else {
-        Box::new(result_printer::ANSIWriter::new())
-    };
+fn make_result_printer(
+    args: cli::Cli,
+    is_term_connected: bool,
+) -> Box<dyn result_printer::QueryResultPrinter> {
+    let base_printer: Box<dyn result_printer::QueryResultPrinter> =
+        if args.disable_ansi || !is_term_connected {
+            Box::new(result_printer::PlainWriter::new())
+        } else {
+            Box::new(result_printer::ANSIWriter::new())
+        };
 
     if args.number_lines {
-        return Box::new(result_printer::LineNumberWriter::new(base_printer))
+        return Box::new(result_printer::LineNumberWriter::new(base_printer));
     }
 
     base_printer
@@ -66,8 +71,19 @@ fn process_query(
 ) -> anyhow::Result<Vec<QueryResult>> {
     let mut cursor = tree_sitter::QueryCursor::new();
     let tree_interface: Rc<dyn TreeInterface> = make_tree_interface(sf.lang);
-    let compiled_query = compile_query(sf.lang, ast.language(), Rc::clone(&tree_interface), query_plan)?;
-    let result = evaluate_plan(sf, ast, Rc::clone(&tree_interface), &mut cursor, &compiled_query)?;
+    let compiled_query = compile_query(
+        sf.lang,
+        ast.language(),
+        Rc::clone(&tree_interface),
+        query_plan,
+    )?;
+    let result = evaluate_plan(
+        sf,
+        ast,
+        Rc::clone(&tree_interface),
+        &mut cursor,
+        &compiled_query,
+    )?;
     Ok(result)
 }
 
@@ -139,7 +155,7 @@ fn spawn_accumulator_thread(
 ) -> thread::JoinHandle<Statistics> {
     thread::spawn(move || {
         let mut stats = Statistics::new();
-        let mut output_dest : Box<dyn std::io::Write> = Box::new(std::io::stdout());
+        let mut output_dest: Box<dyn std::io::Write> = Box::new(std::io::stdout());
         let result_writer = make_result_printer(args, std::io::stdout().is_terminal());
 
         loop {
@@ -152,10 +168,15 @@ fn spawn_accumulator_thread(
                     stats.num_files_parsed += 1;
                     stats.num_matches += qr.results.len();
                     for res in qr.results {
-                        result_printer::print_query_result(&*result_writer, &qr.source_file, &res, &mut output_dest)
-                            .unwrap_or_else(|e| {
-                                error!("Error while printing a result: {:?}", e);
-                            });
+                        result_printer::print_query_result(
+                            &*result_writer,
+                            &qr.source_file,
+                            &res,
+                            &mut output_dest,
+                        )
+                        .unwrap_or_else(|e| {
+                            error!("Error while printing a result: {:?}", e);
+                        });
                     }
                 }
             }
@@ -170,8 +191,7 @@ fn print_library() {
 }
 
 fn initialize_logging(log_file_path: &Option<PathBuf>) -> anyhow::Result<()> {
-    let subscriber_builder = FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG);
+    let subscriber_builder = FmtSubscriber::builder().with_max_level(Level::DEBUG);
     match log_file_path {
         None => {
             let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
@@ -217,14 +237,20 @@ fn main() -> anyhow::Result<()> {
 
     if let Some(shell) = args.print_shell_completions {
         let mut cmd = cli::Cli::command();
-        clap_complete::generate::<clap_complete::Shell, String>(shell, &mut cmd, "qg".into(), &mut std::io::stdout());
+        clap_complete::generate::<clap_complete::Shell, String>(
+            shell,
+            &mut cmd,
+            "qg".into(),
+            &mut std::io::stdout(),
+        );
         std::process::exit(0);
     }
 
     // Set up logging
     initialize_logging(&args.log_file)?;
 
-    let thread_count = args.num_threads
+    let thread_count = args
+        .num_threads
         .unwrap_or(std::cmp::max(1, num_cpus::get()) - 1);
 
     let cwd = std::env::current_dir()?;

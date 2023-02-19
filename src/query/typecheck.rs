@@ -230,7 +230,7 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
                 expr: Expr_::EqualityComparison {
                     lhs: Box::new(lhs_ty),
                     op: *op,
-                    rhs: Box::new(rhs_ty)
+                    rhs: Box::new(rhs_ty),
                 },
                 type_: ret_ty,
             })
@@ -259,7 +259,7 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
             Ok(Expr {
                 expr: Expr_::LogicalConjunction {
                     lhs: Box::new(lhs_ty),
-                    rhs: Box::new(rhs_ty)
+                    rhs: Box::new(rhs_ty),
                 },
                 type_: ret_ty,
             })
@@ -330,11 +330,18 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
             };
 
             Ok(Expr {
-                expr: Expr_::Aggregate { op: *op, operands: typed_exprs },
+                expr: Expr_::Aggregate {
+                    op: *op,
+                    operands: typed_exprs,
+                },
                 type_: ty,
             })
         }
-        Expr_::QualifiedAccess { base, method_name, operands } => {
+        Expr_::QualifiedAccess {
+            base,
+            method_name,
+            operands,
+        } => {
             let mut typed_operands = Vec::new();
             for op in operands {
                 let typed_op = typecheck_expr(env, op)?;
