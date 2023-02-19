@@ -13,7 +13,7 @@ pub struct Cli {
     pub root: Option<PathBuf>,
     #[arg(short, long, help = "Prefix each matched line with its line number")]
     pub number_lines: bool,
-    #[arg(long, help = "Print out the supported CodeQL types and methods")]
+    #[arg(long, help = "Print out the supported CodeQL types and methods and exit")]
     pub print_library: bool,
     #[arg(long, help = "A file to write log events to (instead of stderr)")]
     pub log_file: Option<PathBuf>,
@@ -23,6 +23,8 @@ pub struct Cli {
     pub print_query_ir: bool,
     #[arg(long, help = "Suppress ANSI terminal output when writing matches to the terminal")]
     pub disable_ansi: bool,
-    #[arg(long, help = "Print out a man page (in ROFF format) that can be saved on the user's MANPATH")]
+    #[arg(long, help = "Print out a man page (in ROFF format) that can be saved on the user's MANPATH and exit")]
     pub print_manpage: bool,
+    #[arg(long, help = "Print shell completions and exit")]
+    pub print_shell_completions: Option<clap_complete::Shell>
 }
