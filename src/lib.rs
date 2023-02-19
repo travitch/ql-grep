@@ -16,4 +16,4 @@ pub use crate::plan::{plan_query, QueryPlan};
 pub use crate::query::ir::{Select, Syntax, Typed};
 pub use crate::query::parse_query;
 pub use crate::query::typecheck::{TypedQuery, typecheck_query};
-pub use crate::source_file::SourceFile;
+pub use crate::source_file::{SourceError, SourceFile};
