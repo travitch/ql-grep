@@ -104,6 +104,8 @@ type "Call" {
 type "Expr" {
     method "isCompileTimeConstant" type="boolean" status="Unimplemented" \
         docstring=r"Returns `true` if the expression is a literal at compile time"
+    method "isStringLiteral" type="boolean" tag="[tag:library:Expr:isStringLiteral]" \
+        docstring=r"Returns `true` if the expression is a string literal"
 }
 
 type "Type" {

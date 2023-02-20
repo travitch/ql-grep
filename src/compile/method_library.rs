@@ -471,6 +471,35 @@ fn call_get_argument(
     }
 }
 
+/// Returns true if the given expression is a string literal
+///
+/// Implements:
+/// - [ref:library:Expr:isStringLiteral]
+fn expr_is_string_literal(
+    ti: Rc<dyn TreeInterface>,
+    base: &NodeFilter,
+    operands: &Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::ExprComputation(c) => {
+            let get_expr = Rc::clone(&c.extract);
+            let comp = NodeMatcher {
+                extract: Rc::new(move |ctx, source| {
+                    get_expr(ctx, source).map(|expr_ref| {
+                        let expr_node = ctx.lookup_expression(&expr_ref.value);
+                        WithRanges::new_single(ti.expr_is_string_literal(&expr_node), expr_node.range())
+                    })
+                }),
+            };
+            Ok(NodeFilter::Predicate(comp))
+        }
+        nf => {
+            panic!("Impossible value for call `expr_is_string_literal`: {}", nf.kind());
+        }
+    }
+}
+
 /// Validate the implementations of method calls against the claims in the
 /// library documentation.  The intent is that the library documentation should
 /// always correctly reflect what subset of CodeQL ql-grep supports.  Any
@@ -651,6 +680,11 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     impls.insert(
         (Type::Call, "getArgument".into()),
         Handler(Arc::new(call_get_argument)),
+    );
+
+    impls.insert(
+        (Type::Expr, "isStringLiteral".into()),
+        Handler(Arc::new(expr_is_string_literal)),
     );
 
     validate_library(&impls);

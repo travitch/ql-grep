@@ -133,6 +133,10 @@ impl<'a> EvaluationContext<'a> {
         }
     }
 
+    pub fn lookup_expression(&self, expr_id: &ExprRef) -> Node<'a> {
+        *self.expr_nodes.get(expr_id).unwrap()
+    }
+
     pub fn attach_file_import_index(&mut self, file_imports: FileImportIndex) {
         self.file_imports = Some(file_imports);
     }
@@ -307,4 +311,7 @@ pub trait TreeInterface {
 
     /// Return the callsites in the given callable
     fn callable_call_sites(&self, node: &NodeMatcher<CallableRef>) -> NodeListMatcher<Callsite>;
+
+    /// Returns true if the given node is a string literal expression
+    fn expr_is_string_literal(&self, node: &Node) -> bool;
 }

@@ -1,0 +1,12 @@
+# Test that the callsite and expr queries work by finding printf calls that do not have a literal format string
+#
+# Note the test is actually checking the opposite because we don't have negation yet
+
+query = """
+from Function f, Call c
+where c = f.getACall() and (c.getTarget() = "printf" and c.getArgument(0).isStringLiteral())
+select f
+"""
+
+codebase = "feature/0013-printf-literal-format"
+num_matches = 1
