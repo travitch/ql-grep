@@ -1,0 +1,11 @@
+# Test that queries against call site names work in Java
+
+query = """
+from Method m, Call c
+where c = m.getACall() and c.getTarget() = "getBean"
+select m
+"""
+
+codebase = "feature/0012-java-callsite-target-name"
+num_matches = 1
+

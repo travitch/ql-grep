@@ -68,6 +68,30 @@ impl BoundNode {
     }
 }
 
+/// A reference to an expression node
+///
+/// The nodes themselves are stored in the `EvaluationContext` so that they can
+/// be lazily decoded.
+///
+/// Note that the reference id is the node id from tree-sitter
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub struct ExprRef(usize);
+
+impl ExprRef {
+    pub fn new(id: usize) -> Self {
+        ExprRef(id)
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct CallsiteRef(String);
+
+impl CallsiteRef {
+    pub fn new(var_name: String) -> Self {
+        CallsiteRef(var_name)
+    }
+}
+
 /// All of the context needed during evaluation
 ///
 /// These are largely tables of objects that would have lifetimes too complex to
@@ -78,6 +102,10 @@ pub struct EvaluationContext<'a> {
     callables: HashMap<CallableRef, Node<'a>>,
     /// All of the parsed parameters for the given function
     parameters: HashMap<ParameterRef, WithRanges<FormalArgument>>,
+    /// References to (not-yet interpreted) expression nodes
+    expr_nodes: HashMap<ExprRef, Node<'a>>,
+    /// Callsites bound to variables
+    callsites: HashMap<CallsiteRef, WithRanges<Callsite>>,
     /// The index of the imports in the current file
     ///
     /// This is an `Option` to distinguish the case of "did not run the
@@ -92,7 +120,16 @@ impl<'a> EvaluationContext<'a> {
         EvaluationContext {
             callables: HashMap::new(),
             parameters: HashMap::new(),
+            expr_nodes: HashMap::new(),
+            callsites: HashMap::new(),
             file_imports: None,
+        }
+    }
+
+    pub fn add_expression_bindings(&mut self, bindings: Vec<(ExprRef, Node<'a>)>) {
+        // self.expr_nodes.extend(bindings.iter());
+        for (eref, node) in bindings {
+            self.expr_nodes.insert(eref, node);
         }
     }
 
@@ -122,6 +159,14 @@ impl<'a> EvaluationContext<'a> {
 
     pub fn bind_parameter(&mut self, pr: &ParameterRef, param: &WithRanges<FormalArgument>) {
         self.parameters.insert(pr.clone(), param.clone());
+    }
+
+    pub fn lookup_callsite(&self, cr: &CallsiteRef) -> &WithRanges<Callsite> {
+        self.callsites.get(cr).unwrap()
+    }
+
+    pub fn bind_callsite(&mut self, cr: &CallsiteRef, callsite: &WithRanges<Callsite>) {
+        self.callsites.insert(cr.clone(), callsite.clone());
     }
 
     /// Drop any bindings that are in the map
@@ -192,6 +237,25 @@ pub struct FormalArgument {
     pub index: usize,
 }
 
+/// The evaluation-time representation of a call site
+#[derive(Clone, Debug)]
+pub struct Callsite {
+    /// The name of the callee; note that this could be a real function name or
+    /// a reference to a local variable (in the case of a function pointer)
+    pub target_name: String,
+    /// The argument expressions
+    pub arguments: Vec<ExprRef>,
+}
+
+impl Callsite {
+    pub fn new(name: String, args: Vec<ExprRef>) -> Self {
+        Self {
+            target_name: name,
+            arguments: args,
+        }
+    }
+}
+
 /// The interface for generating tree matchers for each language
 ///
 /// While the primitives are very similar across all languages, the
@@ -237,4 +301,7 @@ pub trait TreeInterface {
         &self,
         node: &NodeMatcher<CallableRef>,
     ) -> Option<NodeMatcher<LanguageType>>;
+
+    /// Return the callsites in the given callable
+    fn callable_call_sites(&self, node: &NodeMatcher<CallableRef>) -> NodeListMatcher<Callsite>;
 }

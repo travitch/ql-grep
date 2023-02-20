@@ -1,0 +1,10 @@
+# Test that queries against call site names work in C
+
+query = """
+from Function f, Call c
+where c = f.getACall() and c.getTarget() = "printf"
+select f
+"""
+
+codebase = "feature/0011-c-callsite-target-name"
+num_matches = 1
