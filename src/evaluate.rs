@@ -28,6 +28,12 @@ enum Value {
     Constant(Constant),
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum RelationalFailure {
+    #[error("No value from scalar evaluation")]
+    NoValue
+}
+
 /// Returns the result of evaluating a node filter on the given node
 ///
 /// This is currently set up as a very naive interpreter. In the future, the
@@ -40,16 +46,19 @@ fn evaluate_filter<'a, 'b: 'a>(
 ) -> anyhow::Result<(Value, Vec<tree_sitter::Range>)> {
     match flt {
         NodeFilter::Predicate(nm) => {
-            let b = (nm.extract)(ctx, target.source.as_bytes());
-            Ok((Value::Constant(Constant::Boolean(b.value)), b.ranges))
+            (nm.extract)(ctx, target.source.as_bytes())
+                .map(|b| (Value::Constant(Constant::Boolean(b.value)), b.ranges))
+                .ok_or(anyhow::anyhow!(RelationalFailure::NoValue))
         }
         NodeFilter::NumericComputation(nm) => {
-            let i = (nm.extract)(ctx, target.source.as_bytes());
-            Ok((Value::Constant(Constant::Integer(i.value)), i.ranges))
+            (nm.extract)(ctx, target.source.as_bytes())
+                .map(|i| (Value::Constant(Constant::Integer(i.value)), i.ranges))
+                .ok_or(anyhow::anyhow!(RelationalFailure::NoValue))
         }
         NodeFilter::StringComputation(nm) => {
-            let s = (nm.extract)(ctx, target.source.as_bytes());
-            Ok((Value::Constant(Constant::String_(s.value)), s.ranges))
+            (nm.extract)(ctx, target.source.as_bytes())
+                .map(|s| (Value::Constant(Constant::String_(s.value)), s.ranges))
+                .ok_or(anyhow::anyhow!(RelationalFailure::NoValue))
         }
         NodeFilter::TypeComputation(_nm) => {
             panic!("Top-level evaluation of types is not supported");
@@ -99,6 +108,9 @@ fn evaluate_filter<'a, 'b: 'a>(
         }
         NodeFilter::CallsiteListComputation(_c) => {
             panic!("Not evaluating callsite list computations");
+        }
+        NodeFilter::ExprComputation(_c) => {
+            panic!("Not evaluating expr computations");
         }
     }
 }

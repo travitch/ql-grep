@@ -176,14 +176,15 @@ fn string_regexp_match<'a>(
             panic!("Invalid regex for `regexpMatch`")
         }
     };
-    let x = Rc::clone(&c.extract);
+    let get_string = Rc::clone(&c.extract);
     let comp = NodeMatcher {
         extract: Rc::new(move |ctx, source| {
-            let matched_string = x(ctx, source);
-            WithRanges::new(
-                rx.is_match(matched_string.value.as_ref()),
-                vec![matched_string.ranges],
-            )
+            get_string(ctx, source).map(|matched_string| {
+                WithRanges::new(
+                    rx.is_match(matched_string.value.as_ref()),
+                    vec![matched_string.ranges],
+                )
+            })
         }),
     };
     Ok(NodeFilter::Predicate(comp))
@@ -201,17 +202,18 @@ fn parameter_get_name<'a>(
     assert!(operands.is_empty());
     match base {
         NodeFilter::ArgumentComputation(c) => {
-            let x = Rc::clone(&c.extract);
+            let get_argument = Rc::clone(&c.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
-                    let parameter_result = x(ctx, source);
-                    WithRanges::new(
-                        parameter_result
-                            .value
-                            .name
-                            .unwrap_or_else(|| "<none>".into()),
-                        vec![parameter_result.ranges],
-                    )
+                    get_argument(ctx, source).map(|argument_result| {
+                        WithRanges::new(
+                            argument_result
+                                .value
+                                .name
+                                .unwrap_or_else(|| "<none>".into()),
+                            vec![argument_result.ranges],
+                        )
+                    })
                 }),
             };
             Ok(NodeFilter::StringComputation(comp))
@@ -234,17 +236,18 @@ fn parameter_get_type<'a>(
     assert!(operands.is_empty());
     match base {
         NodeFilter::ArgumentComputation(c) => {
-            let x = Rc::clone(&c.extract);
+            let get_argument = Rc::clone(&c.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
                     // FIXME: Probably want to have a better (i.e., more
                     // structured) representation if the type is missing
                     let default_ty = LanguageType::new("<Any>");
-                    let parameter_result = x(ctx, source);
-                    WithRanges::new(
-                        parameter_result.value.declared_type.unwrap_or(default_ty),
-                        vec![parameter_result.ranges],
-                    )
+                    get_argument(ctx, source).map(|argument_result| {
+                        WithRanges::new(
+                            argument_result.value.declared_type.unwrap_or(default_ty),
+                            vec![argument_result.ranges],
+                        )
+                    })
                 }),
             };
 
@@ -268,14 +271,15 @@ fn parameter_get_index<'a>(
     assert!(operands.is_empty());
     match base {
         NodeFilter::ArgumentComputation(c) => {
-            let x = Rc::clone(&c.extract);
+            let get_argument = Rc::clone(&c.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
-                    let argument_result = x(ctx, source);
-                    WithRanges::new(
-                        argument_result.value.index as i32,
-                        vec![argument_result.ranges],
-                    )
+                    get_argument(ctx, source).map(|argument_result| {
+                        WithRanges::new(
+                            argument_result.value.index as i32,
+                            vec![argument_result.ranges],
+                        )
+                    })
                 }),
             };
             Ok(NodeFilter::NumericComputation(comp))
@@ -298,11 +302,12 @@ fn type_get_name<'a>(
     assert!(operands.is_empty());
     match base {
         NodeFilter::TypeComputation(tc) => {
-            let x = Rc::clone(&tc.extract);
+            let get_type = Rc::clone(&tc.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
-                    let type_result = x(ctx, source);
-                    WithRanges::new(type_result.value.as_type_string(), vec![type_result.ranges])
+                    get_type(ctx, source).map(|type_result| {
+                        WithRanges::new(type_result.value.as_type_string(), vec![type_result.ranges])
+                    })
                 }),
             };
 
@@ -357,8 +362,9 @@ fn import_get_name<'a>(
             let get_import = Rc::clone(&c.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
-                    let import_res = get_import(ctx, source);
-                    WithRanges::new(import_res.value.to_string(), vec![import_res.ranges])
+                    get_import(ctx, source).map(|import_res| {
+                        WithRanges::new(import_res.value.to_string(), vec![import_res.ranges])
+                    })
                 }),
             };
             Ok(NodeFilter::StringComputation(comp))
@@ -409,14 +415,58 @@ fn call_get_target(
             let get_callsite = Rc::clone(&c.extract);
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx, source| {
-                    let callsite_res = get_callsite(ctx, source);
-                    WithRanges::new(callsite_res.value.target_name.clone(), vec![callsite_res.ranges])
+                    get_callsite(ctx, source).map(|callsite_res| {
+                        WithRanges::new(callsite_res.value.target_name.clone(), vec![callsite_res.ranges])
+                    })
                 }),
             };
             Ok(NodeFilter::StringComputation(comp))
         }
         nf => {
             panic!("Impossible value for `call_get_target`: {}", nf.kind());
+        }
+    }
+}
+
+/// Get the argument at a given index in a call's argument list
+///
+/// Implements:
+/// - [ref:library:Call:getArgument]
+fn call_get_argument(
+    _ti: Rc<dyn TreeInterface>,
+    base: &NodeFilter,
+    operands: &Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.len() == 1);
+    match base {
+        NodeFilter::CallsiteComputation(c) => {
+            let get_callsite = Rc::clone(&c.extract);
+            let arg_idx = match operands[0].expr {
+                Expr_::ConstantExpr(Constant::Integer(i)) => {
+                    assert!(i >= 0);
+                    i as usize
+                },
+                // FIXME: Argument lists should be evaluated into NodeFilters at
+                // this point so that we can just execute it to get a concrete
+                // value
+                _ => panic!("Invalid argument to Call.getArgument"),
+            };
+            let comp = NodeMatcher {
+                extract: Rc::new(move |ctx, source| {
+                    get_callsite(ctx, source).map(|callsite_res| {
+                        let arg_list = callsite_res.value.arguments;
+                        if arg_idx < arg_list.len() {
+                            Some(WithRanges::value(arg_list[arg_idx]))
+                        } else {
+                            None
+                        }
+                    }).flatten()
+                }),
+            };
+            Ok(NodeFilter::ExprComputation(comp))
+        }
+        nf => {
+            panic!("Impossible value for `call_get_argument`: {}", nf.kind());
         }
     }
 }
@@ -597,6 +647,10 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     impls.insert(
         (Type::Call, "getTarget".into()),
         Handler(Arc::new(call_get_target)),
+    );
+    impls.insert(
+        (Type::Call, "getArgument".into()),
+        Handler(Arc::new(call_get_argument)),
     );
 
     validate_library(&impls);

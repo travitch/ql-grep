@@ -198,10 +198,13 @@ impl<'a> Default for EvaluationContext<'a> {
 /// For example, a query might select argument nodes and the matcher could
 /// extract a list of argument structures.
 pub struct NodeMatcher<R> {
-    pub extract: Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> WithRanges<R>>,
+    pub extract: Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> Option<WithRanges<R>>>,
 }
 
 /// A variant of `NodeMatcher` for sequences/relations
+///
+/// Note that, unlike the scalar `NodeMatcher`, this version does not need an
+/// `Option` to indicate failure. It can simply return an empty sequence.
 pub struct NodeListMatcher<R> {
     pub extract:
         Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> Vec<WithRanges<R>>>,

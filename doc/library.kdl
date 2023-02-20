@@ -93,7 +93,7 @@ type "Parameter" {
 
 type "Call" {
     contains "Expr"
-    method "getArgument" type="Expr" status="Unimplemented" {
+    method "getArgument" type="Expr" tag="[tag:library:Call:getArgument]" {
         parameter "index" type="int"
     }
     method "getAnArgument" type="Expr" status="Unimplemented"
