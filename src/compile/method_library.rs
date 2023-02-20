@@ -1,157 +1,26 @@
+mod call;
+mod callable;
+mod expr;
+pub mod handler;
+mod parameter;
+
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::compile::errors::PlanError;
-use crate::compile::interface::{LanguageType, NodeListMatcher, NodeMatcher, TreeInterface};
+use crate::compile::interface::{NodeListMatcher, NodeMatcher, TreeInterface};
 use crate::compile::NodeFilter;
 use crate::library::index::{library_index, MethodSignature};
 use crate::library::Status;
 use crate::query::ir::*;
 use crate::query::val_type::Type;
 use crate::with_ranges::WithRanges;
-
-/// A handler for method calls (qualified accesses) in the planner
-///
-/// The arguments are:
-///
-/// 1. The `TreeInterface` that abstracts the tree-sitter AST query facility
-/// 2. The translated node filter of the receiver object of the method (which may not be needed)
-/// 3. The typed operands of the method call
-///
-/// The callback returns a node filter that is suitable for evaluating the method call
-///
-/// FIXME: The arguments need to be run-time values
-pub struct Handler(
-    pub  Arc<
-        dyn for<'a> Fn(
-                Rc<dyn TreeInterface>,
-                &'a NodeFilter,
-                &'a Vec<Expr<Typed>>,
-            ) -> anyhow::Result<NodeFilter>
-            + Send
-            + Sync,
-    >,
-);
-
-/// Get the name of a callable using the language interface
-///
-/// Implements:
-/// - [ref:library:Function:getName]
-/// - [ref:library:Method:getName]
-/// - [ref:library:Callable:getName]
-fn callable_get_name<'a>(
-    ti: Rc<dyn TreeInterface>,
-    base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    // This is not necessarily an assertion, as this may not be supported for
-    // the current language (which we don't know).
-    match base {
-        NodeFilter::CallableComputation(callable_matcher) => {
-            let name_matcher = ti
-                .callable_name(callable_matcher)
-                .ok_or_else(|| PlanError::NotSupported("getNames".into(), "callable".into()))?;
-            Ok(NodeFilter::StringComputation(name_matcher))
-        }
-        _ => {
-            panic!("Implementation error: only a callable should be possible here");
-        }
-    }
-}
-
-/// This is a relational method that returns a *list* of parameters
-///
-/// Implements:
-/// - [ref:library:Function:getAParameter]
-/// - [ref:library:Method:getAParameter]
-/// - [ref:library:Callable:getAParameter]
-fn callable_get_a_parameter<'a>(
-    ti: Rc<dyn TreeInterface>,
-    base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    match base {
-        NodeFilter::CallableComputation(callable_matcher) => {
-            let arg_matcher = ti
-                .callable_arguments(callable_matcher)
-                .ok_or_else(|| PlanError::NotSupported("arguments".into(), "callable".into()))?;
-            Ok(NodeFilter::ArgumentListComputation(arg_matcher))
-        }
-        _ => {
-            panic!("Implementation error: only a callable should be possible here");
-        }
-    }
-}
-
-/// Returns True if the method contains a parse error
-///
-/// Implements:
-/// - [ref:library:Callable:hasParseError]
-/// - [ref:library:Function:hasParseError]
-/// - [ref:library:Method:hasParseError]
-fn callable_has_parse_error<'a>(
-    ti: Rc<dyn TreeInterface>,
-    base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    match base {
-        NodeFilter::CallableComputation(callable_matcher) => {
-            let error_matcher = ti.callable_has_parse_error(callable_matcher);
-            Ok(NodeFilter::Predicate(error_matcher))
-        }
-        _ => {
-            panic!("Implementation error: only callables should be possible here");
-        }
-    }
-}
-
-/// Gets the return type of the callable
-///
-/// Implements:
-/// - [ref:library:Callable:getType]
-/// - [ref:library:Function:getType]
-/// - [ref:library:Method:getType]
-fn callable_get_return_type<'a>(
-    ti: Rc<dyn TreeInterface>,
-    base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    match base {
-        NodeFilter::CallableComputation(callable_matcher) => {
-            let ty_matcher = ti.callable_return_type(callable_matcher).ok_or_else(|| {
-                PlanError::NotSupported("get-return-type".into(), "callable".into())
-            })?;
-            Ok(NodeFilter::TypeComputation(ty_matcher))
-        }
-        _ => {
-            panic!("Implementation error: only callables should be possible here");
-        }
-    }
-}
-
-/// Get a reference to the file containing the callable.
-///
-/// Note that this doesn't actually do much, as there is only ever one file in
-/// scope and the reference is in the evaluation context.
-///
-/// Implements:
-/// - [ref:library:Callable:getFile]
-/// - [ref:library:Function:getFile]
-/// - [ref:library:Method:getFile]
-fn callable_get_file<'a>(
-    _ti: Rc<dyn TreeInterface>,
-    _base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    Ok(NodeFilter::FileComputation)
-}
+pub use crate::compile::method_library::handler::Handler;
+use crate::compile::method_library::call::CALL_METHODS;
+use crate::compile::method_library::callable::CALLABLE_METHODS;
+use crate::compile::method_library::expr::EXPR_METHODS;
+use crate::compile::method_library::parameter::PARAMETER_METHODS;
 
 /// Match a string against a regular expression
 ///
@@ -188,106 +57,6 @@ fn string_regexp_match<'a>(
         }),
     };
     Ok(NodeFilter::Predicate(comp))
-}
-
-/// Get the name of a formal parameter (of a callable object)
-///
-/// Implements:
-/// - [ref:library:Parameter:getName]
-fn parameter_get_name<'a>(
-    _ti: Rc<dyn TreeInterface>,
-    base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    match base {
-        NodeFilter::ArgumentComputation(c) => {
-            let get_argument = Rc::clone(&c.extract);
-            let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_argument(ctx, source).map(|argument_result| {
-                        WithRanges::new(
-                            argument_result
-                                .value
-                                .name
-                                .unwrap_or_else(|| "<none>".into()),
-                            vec![argument_result.ranges],
-                        )
-                    })
-                }),
-            };
-            Ok(NodeFilter::StringComputation(comp))
-        }
-        _ => {
-            panic!("Invalid base value for Parameter.getName");
-        }
-    }
-}
-
-/// Get the type of a formal parameter (of a callable object)
-///
-/// Implements:
-/// - [ref:library:Parameter:getType]
-fn parameter_get_type<'a>(
-    _ti: Rc<dyn TreeInterface>,
-    base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    match base {
-        NodeFilter::ArgumentComputation(c) => {
-            let get_argument = Rc::clone(&c.extract);
-            let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    // FIXME: Probably want to have a better (i.e., more
-                    // structured) representation if the type is missing
-                    let default_ty = LanguageType::new("<Any>");
-                    get_argument(ctx, source).map(|argument_result| {
-                        WithRanges::new(
-                            argument_result.value.declared_type.unwrap_or(default_ty),
-                            vec![argument_result.ranges],
-                        )
-                    })
-                }),
-            };
-
-            Ok(NodeFilter::TypeComputation(comp))
-        }
-        _ => {
-            panic!("Invalid base value for Parameter.getType");
-        }
-    }
-}
-
-/// Get the index of the parameter in the parameter list
-///
-/// Implements:
-/// - [ref:library:Parameter:getIndex]
-fn parameter_get_index<'a>(
-    _ti: Rc<dyn TreeInterface>,
-    base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    match base {
-        NodeFilter::ArgumentComputation(c) => {
-            let get_argument = Rc::clone(&c.extract);
-            let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_argument(ctx, source).map(|argument_result| {
-                        WithRanges::new(
-                            argument_result.value.index as i32,
-                            vec![argument_result.ranges],
-                        )
-                    })
-                }),
-            };
-            Ok(NodeFilter::NumericComputation(comp))
-        }
-        _ => {
-            panic!("Invalid base value for Parameter.getIndex");
-        }
-    }
 }
 
 /// Get the name of a Type as a String
@@ -375,130 +144,6 @@ fn import_get_name<'a>(
     }
 }
 
-/// Get all of the call sites in the given callable
-///
-/// Implements:
-/// - [ref:library:Callable:getACall]
-/// - [ref:library:Function:getACall]
-/// - [ref:library:Method:getACall]
-fn callable_call_sites<'a>(
-    ti: Rc<dyn TreeInterface>,
-    base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    match base {
-        NodeFilter::CallableComputation(c) => {
-            Ok(NodeFilter::CallsiteListComputation(ti.callable_call_sites(c)))
-        }
-        nf => {
-            panic!("Impossible value type for `callable_call_sites`: {}", nf.kind());
-        }
-    }
-}
-
-/// Get the (string) target of a call
-///
-/// This is usually the name of the function, but could be the name of a
-/// function pointer in C/C++
-///
-/// Implements:
-/// - [ref:library:Call:getTarget]
-fn call_get_target(
-    _ti: Rc<dyn TreeInterface>,
-    base: &NodeFilter,
-    operands: &Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    match base {
-        NodeFilter::CallsiteComputation(c) => {
-            let get_callsite = Rc::clone(&c.extract);
-            let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_callsite(ctx, source).map(|callsite_res| {
-                        WithRanges::new(callsite_res.value.target_name.clone(), vec![callsite_res.ranges])
-                    })
-                }),
-            };
-            Ok(NodeFilter::StringComputation(comp))
-        }
-        nf => {
-            panic!("Impossible value for `call_get_target`: {}", nf.kind());
-        }
-    }
-}
-
-/// Get the argument at a given index in a call's argument list
-///
-/// Implements:
-/// - [ref:library:Call:getArgument]
-fn call_get_argument(
-    _ti: Rc<dyn TreeInterface>,
-    base: &NodeFilter,
-    operands: &Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.len() == 1);
-    match base {
-        NodeFilter::CallsiteComputation(c) => {
-            let get_callsite = Rc::clone(&c.extract);
-            let arg_idx = match operands[0].expr {
-                Expr_::ConstantExpr(Constant::Integer(i)) => {
-                    assert!(i >= 0);
-                    i as usize
-                },
-                // FIXME: Argument lists should be evaluated into NodeFilters at
-                // this point so that we can just execute it to get a concrete
-                // value
-                _ => panic!("Invalid argument to Call.getArgument"),
-            };
-            let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_callsite(ctx, source).map(|callsite_res| {
-                        let arg_list = callsite_res.value.arguments;
-                        if arg_idx < arg_list.len() {
-                            Some(WithRanges::value(arg_list[arg_idx]))
-                        } else {
-                            None
-                        }
-                    }).flatten()
-                }),
-            };
-            Ok(NodeFilter::ExprComputation(comp))
-        }
-        nf => {
-            panic!("Impossible value for `call_get_argument`: {}", nf.kind());
-        }
-    }
-}
-
-/// Returns true if the given expression is a string literal
-///
-/// Implements:
-/// - [ref:library:Expr:isStringLiteral]
-fn expr_is_string_literal(
-    ti: Rc<dyn TreeInterface>,
-    base: &NodeFilter,
-    operands: &Vec<Expr<Typed>>,
-) -> anyhow::Result<NodeFilter> {
-    assert!(operands.is_empty());
-    match base {
-        NodeFilter::ExprComputation(c) => {
-            let get_expr = Rc::clone(&c.extract);
-            let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_expr(ctx, source).map(|expr_ref| {
-                        let expr_node = ctx.lookup_expression(&expr_ref.value);
-                        WithRanges::new_single(ti.expr_is_string_literal(&expr_node), expr_node.range())
-                    })
-                }),
-            };
-            Ok(NodeFilter::Predicate(comp))
-        }
-        nf => {
-            panic!("Impossible value for call `expr_is_string_literal`: {}", nf.kind());
-        }
-    }
-}
 
 /// Validate the implementations of method calls against the claims in the
 /// library documentation.  The intent is that the library documentation should
@@ -563,97 +208,6 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     let mut impls = HashMap::new();
 
     impls.insert(
-        (Type::Method, "getName".into()),
-        Handler(Arc::new(callable_get_name)),
-    );
-    impls.insert(
-        (Type::Function, "getName".into()),
-        Handler(Arc::new(callable_get_name)),
-    );
-    impls.insert(
-        (Type::Callable, "getName".into()),
-        Handler(Arc::new(callable_get_name)),
-    );
-
-    impls.insert(
-        (Type::Method, "getAParameter".into()),
-        Handler(Arc::new(callable_get_a_parameter)),
-    );
-    impls.insert(
-        (Type::Function, "getAParameter".into()),
-        Handler(Arc::new(callable_get_a_parameter)),
-    );
-    impls.insert(
-        (Type::Callable, "getAParameter".into()),
-        Handler(Arc::new(callable_get_a_parameter)),
-    );
-
-    impls.insert(
-        (Type::Method, "hasParseError".into()),
-        Handler(Arc::new(callable_has_parse_error)),
-    );
-    impls.insert(
-        (Type::Function, "hasParseError".into()),
-        Handler(Arc::new(callable_has_parse_error)),
-    );
-    impls.insert(
-        (Type::Callable, "hasParseError".into()),
-        Handler(Arc::new(callable_has_parse_error)),
-    );
-
-    impls.insert(
-        (Type::Method, "getFile".into()),
-        Handler(Arc::new(callable_get_file)),
-    );
-    impls.insert(
-        (Type::Function, "getFile".into()),
-        Handler(Arc::new(callable_get_file)),
-    );
-    impls.insert(
-        (Type::Callable, "getFile".into()),
-        Handler(Arc::new(callable_get_file)),
-    );
-
-    impls.insert(
-        (Type::Method, "getType".into()),
-        Handler(Arc::new(callable_get_return_type)),
-    );
-    impls.insert(
-        (Type::Function, "getType".into()),
-        Handler(Arc::new(callable_get_return_type)),
-    );
-    impls.insert(
-        (Type::Callable, "getType".into()),
-        Handler(Arc::new(callable_get_return_type)),
-    );
-
-    impls.insert(
-        (Type::Method, "getACall".into()),
-        Handler(Arc::new(callable_call_sites)),
-    );
-    impls.insert(
-        (Type::Function, "getACall".into()),
-        Handler(Arc::new(callable_call_sites)),
-    );
-    impls.insert(
-        (Type::Callable, "getACall".into()),
-        Handler(Arc::new(callable_call_sites)),
-    );
-
-    impls.insert(
-        (Type::Parameter, "getName".into()),
-        Handler(Arc::new(parameter_get_name)),
-    );
-    impls.insert(
-        (Type::Parameter, "getType".into()),
-        Handler(Arc::new(parameter_get_type)),
-    );
-    impls.insert(
-        (Type::Parameter, "getIndex".into()),
-        Handler(Arc::new(parameter_get_index)),
-    );
-
-    impls.insert(
         (Type::PrimString, "regexpMatch".into()),
         Handler(Arc::new(string_regexp_match)),
     );
@@ -673,19 +227,23 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
         Handler(Arc::new(import_get_name)),
     );
 
-    impls.insert(
-        (Type::Call, "getTarget".into()),
-        Handler(Arc::new(call_get_target)),
-    );
-    impls.insert(
-        (Type::Call, "getArgument".into()),
-        Handler(Arc::new(call_get_argument)),
-    );
+    CALLABLE_METHODS.iter().for_each(|(name, handler)| {
+        impls.insert((Type::Callable, (*name).into()), handler.clone());
+        impls.insert((Type::Function, (*name).into()), handler.clone());
+        impls.insert((Type::Method, (*name).into()), handler.clone());
+    });
 
-    impls.insert(
-        (Type::Expr, "isStringLiteral".into()),
-        Handler(Arc::new(expr_is_string_literal)),
-    );
+    PARAMETER_METHODS.iter().for_each(|(ty, name, handler)| {
+        impls.insert((ty.clone(), (*name).into()), handler.clone());
+    });
+
+    CALL_METHODS.iter().for_each(|(ty, name, handler)| {
+        impls.insert((ty.clone(), (*name).into()), handler.clone());
+    });
+
+    EXPR_METHODS.iter().for_each(|(ty, name, handler)| {
+        impls.insert((ty.clone(), (*name).into()), handler.clone());
+    });
 
     validate_library(&impls);
 
