@@ -61,14 +61,15 @@ where
                 // that the scalar processor (the transformer, above) can
                 // process it unmodified
                 let wrapper_matcher = NodeMatcher {
-                    extract: Rc::new(move |_ctx, _source| arg.clone()),
+                    extract: Rc::new(move |_ctx, _source| Some(arg.clone())),
                 };
 
                 let wrapper_filter = wrap_one(wrapper_matcher);
                 let result_filter = xfrm(Rc::new(wrapper_filter)).unwrap();
                 let comp = extract_one(result_filter);
-                let val = (comp.extract)(ctx, source);
-                res.push(val);
+                (comp.extract)(ctx, source).map(|val| {
+                    res.push(val);
+                });
             }
 
             res

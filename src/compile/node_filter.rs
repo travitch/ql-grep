@@ -1,5 +1,5 @@
 use crate::compile::interface::{
-    CallableRef, Callsite, FormalArgument, LanguageType, NodeListMatcher, NodeMatcher,
+    CallableRef, Callsite, ExprRef, FormalArgument, LanguageType, NodeListMatcher, NodeMatcher,
 };
 use crate::preprocess::Import;
 use crate::query::ir::CachedRegex;
@@ -20,6 +20,7 @@ pub enum NodeFilter {
     ArgumentListComputation(NodeListMatcher<FormalArgument>),
     ImportComputation(NodeMatcher<Import>),
     ImportListComputation(NodeListMatcher<Import>),
+    ExprComputation(NodeMatcher<ExprRef>),
     /// Currently it is not possible to reference other files during evaluation
     /// (and it is unlikely that it ever will be possible), so no real
     /// information is required during evaluation (the File reference is in the
@@ -46,6 +47,7 @@ impl NodeFilter {
             NodeFilter::ArgumentListComputation(_) => "[Parameter]".into(),
             NodeFilter::ImportComputation(_) => "Import".into(),
             NodeFilter::ImportListComputation(_) => "[Import]".into(),
+            NodeFilter::ExprComputation(_) => "Expr".into(),
             NodeFilter::FileComputation => "File".into(),
         }
     }
