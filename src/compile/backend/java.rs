@@ -146,6 +146,60 @@ impl TreeInterface for JavaTreeInterface {
             }),
         }
     }
+
+    fn callable_call_sites(&self, node: &NodeMatcher<CallableRef>) -> NodeListMatcher<Callsite> {
+        let get_callable_ref = Rc::clone(&node.extract);
+        NodeListMatcher {
+            extract: Rc::new(move |ctx, source| {
+                let callable_ref = get_callable_ref(ctx, source);
+                let callable_node = ctx.lookup_callable(&callable_ref.value);
+                let mut cur = tree_sitter::QueryCursor::new();
+                let ql_query = "(method_invocation name: (_) @name arguments: (argument_list) @args)";
+                let query = tree_sitter::Query::new(callable_node.language(), ql_query)
+                    .unwrap_or_else(|e| panic!("Error while querying for call sites {e:?}"));
+                let query_matches = cur.matches(&query, *callable_node, source);
+
+                let mut callsites = Vec::new();
+                for query_match in query_matches {
+                    // Note that this currently only captures the name of the
+                    // method called; the receiver object or static class name
+                    // (if any) is not captured by the query above
+                    let call_name_node = query_match.captures[0].node;
+                    let arglist_node = query_match.captures[1].node;
+
+                    let (callsite, expr_bindings) = callable_call_sites_from_nodes(source, &call_name_node, &arglist_node);
+
+                    ctx.add_expression_bindings(expr_bindings);
+
+                    let ranges = vec![call_name_node.range(), arglist_node.range()];
+                    let res = WithRanges::new(callsite, vec![ranges]);
+                    callsites.push(res);
+                }
+
+                callsites
+            }),
+        }
+    }
+}
+
+fn callable_call_sites_from_nodes<'a>(
+    source: &[u8],
+    call_name_node: &Node<'a>,
+    arglist_node: &Node<'a>,
+) -> (Callsite, Vec<(ExprRef, Node<'a>)>) {
+    let name = call_name_node.utf8_text(source).unwrap().into();
+    let mut args = Vec::new();
+    let mut arg_refs = Vec::new();
+
+    let mut cur = arglist_node.walk();
+    for arg_node in arglist_node.named_children(&mut cur) {
+        let expr_ref = ExprRef::new(arg_node.id());
+        arg_refs.push(expr_ref);
+        args.push((expr_ref, arg_node));
+    }
+
+    let callsite = Callsite::new(name, arg_refs);
+    (callsite, args)
 }
 
 fn callable_name_node_to_string(n: &Node, src: &[u8]) -> String {

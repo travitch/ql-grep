@@ -342,6 +342,10 @@ fn file_get_an_import<'a>(
     Ok(NodeFilter::ImportListComputation(comp))
 }
 
+/// Get the name (text) of an import
+///
+/// Implements:
+/// - [ref:library:Import:getName]
 fn import_get_name<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
@@ -361,6 +365,58 @@ fn import_get_name<'a>(
         }
         nf => {
             panic!("Impossible value type for `import_get_name`: {}", nf.kind());
+        }
+    }
+}
+
+/// Get all of the call sites in the given callable
+///
+/// Implements:
+/// - [ref:library:Callable:getACall]
+/// - [ref:library:Function:getACall]
+/// - [ref:library:Method:getACall]
+fn callable_call_sites<'a>(
+    ti: Rc<dyn TreeInterface>,
+    base: &'a NodeFilter,
+    operands: &'a Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::CallableComputation(c) => {
+            Ok(NodeFilter::CallsiteListComputation(ti.callable_call_sites(c)))
+        }
+        nf => {
+            panic!("Impossible value type for `callable_call_sites`: {}", nf.kind());
+        }
+    }
+}
+
+/// Get the (string) target of a call
+///
+/// This is usually the name of the function, but could be the name of a
+/// function pointer in C/C++
+///
+/// Implements:
+/// - [ref:library:Call:getTarget]
+fn call_get_target(
+    _ti: Rc<dyn TreeInterface>,
+    base: &NodeFilter,
+    operands: &Vec<Expr<Typed>>,
+) -> anyhow::Result<NodeFilter> {
+    assert!(operands.is_empty());
+    match base {
+        NodeFilter::CallsiteComputation(c) => {
+            let get_callsite = Rc::clone(&c.extract);
+            let comp = NodeMatcher {
+                extract: Rc::new(move |ctx, source| {
+                    let callsite_res = get_callsite(ctx, source);
+                    WithRanges::new(callsite_res.value.target_name.clone(), vec![callsite_res.ranges])
+                }),
+            };
+            Ok(NodeFilter::StringComputation(comp))
+        }
+        nf => {
+            panic!("Impossible value for `call_get_target`: {}", nf.kind());
         }
     }
 }
@@ -493,6 +549,19 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     );
 
     impls.insert(
+        (Type::Method, "getACall".into()),
+        Handler(Arc::new(callable_call_sites)),
+    );
+    impls.insert(
+        (Type::Function, "getACall".into()),
+        Handler(Arc::new(callable_call_sites)),
+    );
+    impls.insert(
+        (Type::Callable, "getACall".into()),
+        Handler(Arc::new(callable_call_sites)),
+    );
+
+    impls.insert(
         (Type::Parameter, "getName".into()),
         Handler(Arc::new(parameter_get_name)),
     );
@@ -523,6 +592,11 @@ static METHOD_IMPLS: Lazy<HashMap<(Type, String), Handler>> = Lazy::new(|| {
     impls.insert(
         (Type::Import, "getName".into()),
         Handler(Arc::new(import_get_name)),
+    );
+
+    impls.insert(
+        (Type::Call, "getTarget".into()),
+        Handler(Arc::new(call_get_target)),
     );
 
     validate_library(&impls);

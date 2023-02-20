@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::compile::errors::PlanError;
-use crate::compile::interface::{BoundNode, CallableRef, NodeMatcher, ParameterRef, TreeInterface};
+use crate::compile::interface::{BoundNode, CallableRef, CallsiteRef, NodeMatcher, ParameterRef, TreeInterface};
 use crate::compile::lift::transform_node_filter;
 use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
@@ -108,6 +108,16 @@ fn compile_var_ref(var_name: &str, var_type: &Type) -> anyhow::Result<NodeFilter
                 }),
             };
             Ok(NodeFilter::ArgumentComputation(m))
+        }
+        Type::Call => {
+            let this_var_name = var_name.to_string();
+            let m = NodeMatcher {
+                extract: Rc::new(move |ctx, _| {
+                    let callsite_ref = CallsiteRef::new(this_var_name.clone());
+                    ctx.lookup_callsite(&callsite_ref).clone()
+                }),
+            };
+            Ok(NodeFilter::CallsiteComputation(m))
         }
         ty => {
             let msg = format!("References to variables of type `{ty}` are not yet supported");
@@ -390,6 +400,31 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                         }),
                     };
 
+                    Ok(NodeFilter::Predicate(m))
+                }
+                NodeFilter::CallsiteListComputation(callsite_comp) => {
+                    let callsite_ref = CallsiteRef::new(bound_var.name.clone());
+                    let m = NodeMatcher {
+                        extract: Rc::new(move |ctx, source| {
+                            let this_ref = callsite_ref.clone();
+                            let mut collected_ranges = Vec::new();
+                            let callsites = (callsite_comp.extract)(ctx, source);
+                            for callsite in callsites {
+                                ctx.bind_callsite(&this_ref, &callsite);
+                                let mut this_result = (eval_func.extract)(ctx, source);
+                                if this_result.value {
+                                    return this_result;
+                                }
+
+                                collected_ranges.append(&mut this_result.ranges);
+                            }
+
+                            WithRanges {
+                                value: false,
+                                ranges: collected_ranges,
+                            }
+                        }),
+                    };
                     Ok(NodeFilter::Predicate(m))
                 }
                 _ => {

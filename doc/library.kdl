@@ -36,7 +36,7 @@ type "Function" {
     method "getType" type="Type" tag="[tag:library:Function:getType]" \
         docstring=r"Get the return type of the `Function`"
     method "getName" type="string" tag="[tag:library:Function:getName]"
-    method "getACall" type="Relational<Call>" status="Unimplemented" \
+    method "getACall" type="Relational<Call>"  tag="[tag:library:Function:getACall]" \
         docstring=r"Return a call expression in the body of this object"
     method "hasParseError" type="boolean" tag="[tag:library:Function:hasParseError]" \
         docstring=r"Returns True if the function contains a parse error"
@@ -55,7 +55,7 @@ type "Method" {
     method "getType" type="Type" tag="[tag:library:Method:getType]" \
         docstring=r"Get the return type of the method"
     method "getName" type="string" tag="[tag:library:Method:getName]"
-    method "getACall" type="Relational<Call>" status="Unimplemented" \
+    method "getACall" type="Relational<Call>"  tag="[tag:library:Method:getACall]" \
         docstring=r"Return a call expression in the body of this object"
     method "hasParseError" type="boolean" tag="[tag:library:Method:hasParseError]" \
         docstring=r"Returns True if the method contains a parse error"
@@ -74,7 +74,7 @@ type "Callable" {
     method "getType" type="Type" tag="[tag:library:Callable:getType]" \
         docstring=r"Get the return type of the callable"
     method "getName" type="string" tag="[tag:library:Callable:getName]"
-    method "getACall" type="Relational<Call>" status="Unimplemented" \
+    method "getACall" type="Relational<Call>" tag="[tag:library:Callable:getACall]" \
         docstring=r"Return a call expression in the body of this object"
     method "hasParseError" type="boolean" tag="[tag:library:Callable:hasParseError]" \
         docstring=r"Returns True if the callable contains a parse error"
@@ -97,7 +97,7 @@ type "Call" {
         parameter "index" type="int"
     }
     method "getAnArgument" type="Expr" status="Unimplemented"
-    method "getTarget" type="string" status="Unimplemented" \
+    method "getTarget" type="string" tag="[tag:library:Call:getTarget]" \
         docstring=r"Return the target of the call; this is a string because there is not necessarily a structured declaration available"
 }
 

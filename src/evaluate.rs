@@ -94,6 +94,12 @@ fn evaluate_filter<'a, 'b: 'a>(
         NodeFilter::FileComputation => {
             panic!("Not evaluating file computations");
         }
+        NodeFilter::CallsiteComputation(_c) => {
+            panic!("Not evaluating callsite computations");
+        }
+        NodeFilter::CallsiteListComputation(_c) => {
+            panic!("Not evaluating callsite list computations");
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::compile::interface::{
-    CallableRef, FormalArgument, LanguageType, NodeListMatcher, NodeMatcher,
+    CallableRef, Callsite, FormalArgument, LanguageType, NodeListMatcher, NodeMatcher,
 };
 use crate::preprocess::Import;
 use crate::query::ir::CachedRegex;
@@ -14,6 +14,8 @@ pub enum NodeFilter {
     StringListComputation(NodeListMatcher<String>),
     RegexComputation(NodeMatcher<CachedRegex>),
     CallableComputation(NodeMatcher<CallableRef>),
+    CallsiteComputation(NodeMatcher<Callsite>),
+    CallsiteListComputation(NodeListMatcher<Callsite>),
     ArgumentComputation(NodeMatcher<FormalArgument>),
     ArgumentListComputation(NodeListMatcher<FormalArgument>),
     ImportComputation(NodeMatcher<Import>),
@@ -38,6 +40,8 @@ impl NodeFilter {
             NodeFilter::StringListComputation(_) => "[string]".into(),
             NodeFilter::RegexComputation(_) => "Regex".into(),
             NodeFilter::CallableComputation(_) => "Callable".into(),
+            NodeFilter::CallsiteComputation(_) => "Callsite".into(),
+            NodeFilter::CallsiteListComputation(_) => "[Callsite]".into(),
             NodeFilter::ArgumentComputation(_) => "Parameter".into(),
             NodeFilter::ArgumentListComputation(_) => "[Parameter]".into(),
             NodeFilter::ImportComputation(_) => "Import".into(),
