@@ -185,6 +185,10 @@ impl TreeInterface for JavaTreeInterface {
             }),
         }
     }
+
+    fn expr_is_string_literal(&self, node: &Node) -> bool {
+        node.kind() == "string_literal"
+    }
 }
 
 fn callable_call_sites_from_nodes<'a>(

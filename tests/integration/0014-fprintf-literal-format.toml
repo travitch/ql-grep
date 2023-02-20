@@ -1,0 +1,14 @@
+# Test that the callsite and expr queries work by finding fprintf calls that do not have a literal format string
+#
+# NOTE: the test is actually checking the opposite because we don't have negation yet
+#
+# NOTE: compared to 0013, this test targets fprintf to ensure that non-zero indexes work
+
+query = """
+from Function f, Call c
+where c = f.getACall() and (c.getTarget() = "fprintf" and c.getArgument(1).isStringLiteral())
+select f
+"""
+
+codebase = "feature/0014-fprintf-literal-format"
+num_matches = 1
