@@ -15,7 +15,7 @@ use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
 use crate::plan::QueryPlan;
 use crate::preprocess::FilePreprocessingPass;
-use crate::query::ir::{AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Typed, VarDecl};
+use crate::query::ir::{AggregateOp, CompOp, Constant, EqualityOp, Expr, Expr_, Typed, VarDecl, VarIdent};
 use crate::query::val_type::Type;
 use crate::source_file::Language;
 use crate::with_ranges::WithRanges;
@@ -39,7 +39,7 @@ pub struct CompiledQuery {
 }
 
 struct Context {
-    symbol_table: HashMap<String, Type>,
+    symbol_table: HashMap<VarIdent, Type>,
 }
 
 impl Context {
@@ -88,29 +88,29 @@ fn compile_constant(c: &Constant) -> NodeFilter {
     }
 }
 
-fn compile_var_ref(var_name: &str, var_type: &Type) -> anyhow::Result<NodeFilter> {
+fn compile_var_ref(var_name: &VarIdent, var_type: &Type) -> anyhow::Result<NodeFilter> {
     // This case covers all references to variables declared in the From
     // clause of the query
     match var_type {
         Type::Callable | Type::Function | Type::Method => {
-            let this_s = var_name.to_string();
+            let this_s = var_name.clone();
             let m = NodeMatcher {
-                extract: Rc::new(move |_| Some(WithRanges::value(CallableRef::new(this_s.as_ref())))),
+                extract: Rc::new(move |_| Some(WithRanges::value(CallableRef::new(this_s.clone())))),
             };
             Ok(NodeFilter::CallableComputation(m))
         }
         Type::Parameter => {
-            let this_s = var_name.to_string();
+            let this_s = var_name.clone();
             let m = NodeMatcher {
                 extract: Rc::new(move |ctx| {
-                    let param_ref = ParameterRef::new(this_s.as_ref());
+                    let param_ref = ParameterRef::new(this_s.clone());
                     Some(ctx.lookup_parameter(&param_ref).clone())
                 }),
             };
             Ok(NodeFilter::ArgumentComputation(m))
         }
         Type::Call => {
-            let this_var_name = var_name.to_string();
+            let this_var_name = var_name.clone();
             let m = NodeMatcher {
                 extract: Rc::new(move |ctx| {
                     let callsite_ref = CallsiteRef::new(this_var_name.clone());
@@ -391,7 +391,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             let compiled_binder = compile_expr(Rc::clone(&ti), relation_expr)?;
             match compiled_binder {
                 NodeFilter::ArgumentListComputation(param_comp) => {
-                    let param_ref = ParameterRef::new(&bound_var.name);
+                    let param_ref = ParameterRef::new(bound_var.name.clone());
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx| {
                             let param_ref_inner = param_ref.clone();
@@ -670,7 +670,7 @@ pub fn compile_query(
             let ty = ctx
                 .symbol_table
                 .get(var)
-                .ok_or_else(|| anyhow::anyhow!(PlanError::UndeclaredVariable(var.into())))?;
+                .ok_or_else(|| anyhow::anyhow!(PlanError::UndeclaredVariable(var.clone())))?;
             let unsupported = PlanError::UnsupportedTypeForLanguage(ty.clone(), lang);
             // NOTE: If the top-level selected type is not supported, the query
             // is just not compiled for this file
@@ -679,7 +679,7 @@ pub fn compile_query(
                 .ok_or_else(|| anyhow::anyhow!(unsupported))?;
             let ts_query = tree_sitter::Query::new(ts_lang, &top_level.query)?;
             let flt = compile_expr(tree_interface, &query_plan.where_formula)?;
-            let bound_node = CallableRef::new(var);
+            let bound_node = CallableRef::new(var.clone());
             let p = CompiledQuery {
                 file_preprocessing: query_plan.file_preprocessing.clone(),
                 steps: QueryAction::TSQuery(flt, ts_query, bound_node),

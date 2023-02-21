@@ -15,7 +15,7 @@ use crate::query::typecheck::TypedQuery;
 use crate::query::val_type::Type;
 
 #[cfg(test)]
-use crate::query::ir::Constant;
+use crate::query::ir::{Constant, VarIdent};
 #[cfg(test)]
 use crate::query::parse_query;
 #[cfg(test)]
@@ -351,10 +351,10 @@ fn rewrites_simple_binders() {
     assert!(plan.var_decls.len() == 2);
     let var_decl = VarDecl {
         type_: Type::Parameter,
-        name: "p".into(),
+        name: VarIdent::StringIdent("p".into()),
     };
     let method_ref = Expr {
-        expr: Expr_::VarRef("m".into()),
+        expr: Expr_::VarRef(VarIdent::StringIdent("m".into())),
         type_: Type::Method,
     };
     let bound_val = Expr {
@@ -366,7 +366,7 @@ fn rewrites_simple_binders() {
         type_: Type::Relational(Box::new(Type::Parameter)),
     };
     let param_ref = Expr {
-        expr: Expr_::VarRef("p".into()),
+        expr: Expr_::VarRef(VarIdent::StringIdent("p".into())),
         type_: Type::Parameter,
     };
     let get_name_expr = Expr {

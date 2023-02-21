@@ -5,7 +5,7 @@ use tree_sitter;
 use crate::query::error::QueryError;
 use crate::query::ir::{
     AggregateOp, AsExpr, CompOp, Constant, EqualityOp, Expr, Expr_, Select, Syntax, Untyped,
-    VarDecl,
+    VarIdent, VarDecl,
 };
 use crate::query::val_type::Type;
 
@@ -141,7 +141,7 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
         "variable" => {
             let var_name_node = get_child_of_kind(node, "varName")?;
             let var_name = parse_var_name(var_name_node, source)?;
-            Expr_::VarRef(var_name)
+            Expr_::VarRef(VarIdent::StringIdent(var_name))
         }
         "comp_term" => {
             // EXPR COMP_OP EXPR
@@ -371,7 +371,7 @@ fn parse_var_decl<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::
     let ty = parse_type_expr(node.named_child(0).unwrap(), source)?;
     let var_name = parse_var_name(node.named_child(1).unwrap(), source)?;
     let decl = VarDecl {
-        name: var_name,
+        name: VarIdent::StringIdent(var_name),
         type_: ty,
     };
     Ok(decl)

@@ -8,7 +8,7 @@ use crate::query::val_type::Type;
 #[derive(thiserror::Error, Debug)]
 pub enum TypecheckError {
     #[error("Reference to variable `{0}` without declaration")]
-    MissingVariableDeclaration(String),
+    MissingVariableDeclaration(VarIdent),
     #[error("Invalid comparison of type `{1:?}` (term `{0:?}`) against `{3:?}` (term `{2:?}`)")]
     InvalidRelationalComparison(Expr<Syntax>, Type, Expr<Syntax>, Type),
     #[error("Invalid receiver type `{0:?}` for method `{1}`")]
@@ -35,7 +35,7 @@ pub enum TypecheckError {
 
 struct TypeEnv {
     /// Records the type of each variable in scope
-    env: HashMap<String, Type>,
+    env: HashMap<VarIdent, Type>,
     /// Provides type signatures for all of the library types and their methods
     type_index: &'static HashMap<Type, TypeIndex>,
     /// File-level preprocessing passes required by methods referenced in the query
@@ -141,10 +141,10 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
         },
         Expr_::VarRef(var_name) => {
             let ty = env.env.get(var_name).ok_or_else(|| {
-                anyhow::anyhow!(TypecheckError::MissingVariableDeclaration(var_name.into()))
+                anyhow::anyhow!(TypecheckError::MissingVariableDeclaration(var_name.clone()))
             })?;
             Ok(Expr {
-                expr: Expr_::VarRef(var_name.into()),
+                expr: Expr_::VarRef(var_name.clone()),
                 type_: ty.clone(),
             })
         }
@@ -449,7 +449,7 @@ fn typecheck_as_expr(env: &mut TypeEnv, as_expr: &AsExpr<Syntax>) -> anyhow::Res
     match &as_expr.ident {
         None => {}
         Some(name) => {
-            env.env.insert(name.clone(), typed_expr.type_.clone());
+            env.env.insert(VarIdent::StringIdent(name.clone()), typed_expr.type_.clone());
         }
     };
 

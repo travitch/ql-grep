@@ -51,9 +51,17 @@ pub enum Constant {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum VarIdent {
+    /// Variables that are named
+    StringIdent(String),
+    /// Synthetic variables created by the query rewriter
+    SyntheticIdent(usize),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct VarDecl {
     pub type_: Type,
-    pub name: String,
+    pub name: VarIdent,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -80,7 +88,7 @@ pub enum Expr_<R: Repr> {
     /// A constant value appearing in a query
     ConstantExpr(Constant),
     /// References to previously-declared variables
-    VarRef(String),
+    VarRef(VarIdent),
     /// An expression node that binds a variable to one of a number of different
     /// relational values (provided by the expression)
     ///
@@ -174,6 +182,15 @@ impl PartialEq for CachedRegex {
 
 impl Eq for CachedRegex {}
 
+impl Display for VarIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VarIdent::StringIdent(s) => write!(f, "{s}"),
+            VarIdent::SyntheticIdent(i) => write!(f, "<{i}>"),
+        }
+    }
+}
+
 impl Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -229,7 +246,7 @@ where
     pub fn to_doc(&self) -> RcDoc<()> {
         match self {
             Expr_::ConstantExpr(c) => RcDoc::as_string(c),
-            Expr_::VarRef(s) => parens(RcDoc::text("var-ref ").append(RcDoc::text(s))),
+            Expr_::VarRef(s) => parens(RcDoc::text("var-ref ").append(RcDoc::text(s.to_string()))),
             Expr_::Bind {
                 bound_var,
                 relation_expr,
