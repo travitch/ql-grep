@@ -47,8 +47,8 @@ fn string_regexp_match<'a>(
     };
     let get_string = Rc::clone(&c.extract);
     let comp = NodeMatcher {
-        extract: Rc::new(move |ctx, source| {
-            get_string(ctx, source).map(|matched_string| {
+        extract: Rc::new(move |ctx| {
+            get_string(ctx).map(|matched_string| {
                 WithRanges::new(
                     rx.is_match(matched_string.value.as_ref()),
                     vec![matched_string.ranges],
@@ -73,8 +73,8 @@ fn type_get_name<'a>(
         NodeFilter::TypeComputation(tc) => {
             let get_type = Rc::clone(&tc.extract);
             let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_type(ctx, source).map(|type_result| {
+                extract: Rc::new(move |ctx| {
+                    get_type(ctx).map(|type_result| {
                         WithRanges::new(type_result.value.as_type_string(), vec![type_result.ranges])
                     })
                 }),
@@ -105,7 +105,7 @@ fn file_get_an_import<'a>(
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     let comp = NodeListMatcher {
-        extract: Rc::new(move |ctx, _source| {
+        extract: Rc::new(move |ctx| {
             ctx.imports()
                 .iter()
                 .cloned()
@@ -130,8 +130,8 @@ fn import_get_name<'a>(
         NodeFilter::ImportComputation(c) => {
             let get_import = Rc::clone(&c.extract);
             let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_import(ctx, source).map(|import_res| {
+                extract: Rc::new(move |ctx| {
+                    get_import(ctx).map(|import_res| {
                         WithRanges::new(import_res.value.to_string(), vec![import_res.ranges])
                     })
                 }),

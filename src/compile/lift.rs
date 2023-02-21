@@ -53,21 +53,21 @@ where
     let args_extract = Rc::clone(&base_elts.extract);
 
     NodeListMatcher {
-        extract: Rc::new(move |ctx, source| {
+        extract: Rc::new(move |ctx| {
             let mut res = Vec::new();
 
-            for arg in args_extract(ctx, source) {
+            for arg in args_extract(ctx) {
                 // Wrap each element in the carrier type for single elements so
                 // that the scalar processor (the transformer, above) can
                 // process it unmodified
                 let wrapper_matcher = NodeMatcher {
-                    extract: Rc::new(move |_ctx, _source| Some(arg.clone())),
+                    extract: Rc::new(move |_ctx| Some(arg.clone())),
                 };
 
                 let wrapper_filter = wrap_one(wrapper_matcher);
                 let result_filter = xfrm(Rc::new(wrapper_filter)).unwrap();
                 let comp = extract_one(result_filter);
-                (comp.extract)(ctx, source).map(|val| {
+                (comp.extract)(ctx).map(|val| {
                     res.push(val);
                 });
             }

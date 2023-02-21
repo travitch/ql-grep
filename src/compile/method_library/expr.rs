@@ -23,8 +23,8 @@ fn expr_is_string_literal(
         NodeFilter::ExprComputation(c) => {
             let get_expr = Rc::clone(&c.extract);
             let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_expr(ctx, source).map(|expr_ref| {
+                extract: Rc::new(move |ctx| {
+                    get_expr(ctx).map(|expr_ref| {
                         let expr_node = ctx.lookup_expression(&expr_ref.value);
                         WithRanges::new_single(ti.expr_is_string_literal(&expr_node), expr_node.range())
                     })

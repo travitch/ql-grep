@@ -24,8 +24,8 @@ fn parameter_get_name<'a>(
         NodeFilter::ArgumentComputation(c) => {
             let get_argument = Rc::clone(&c.extract);
             let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_argument(ctx, source).map(|argument_result| {
+                extract: Rc::new(move |ctx| {
+                    get_argument(ctx).map(|argument_result| {
                         WithRanges::new(
                             argument_result
                                 .value
@@ -58,11 +58,11 @@ fn parameter_get_type<'a>(
         NodeFilter::ArgumentComputation(c) => {
             let get_argument = Rc::clone(&c.extract);
             let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
+                extract: Rc::new(move |ctx| {
                     // FIXME: Probably want to have a better (i.e., more
                     // structured) representation if the type is missing
                     let default_ty = LanguageType::new("<Any>");
-                    get_argument(ctx, source).map(|argument_result| {
+                    get_argument(ctx).map(|argument_result| {
                         WithRanges::new(
                             argument_result.value.declared_type.unwrap_or(default_ty),
                             vec![argument_result.ranges],
@@ -93,8 +93,8 @@ fn parameter_get_index<'a>(
         NodeFilter::ArgumentComputation(c) => {
             let get_argument = Rc::clone(&c.extract);
             let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_argument(ctx, source).map(|argument_result| {
+                extract: Rc::new(move |ctx| {
+                    get_argument(ctx).map(|argument_result| {
                         WithRanges::new(
                             argument_result.value.index as i32,
                             vec![argument_result.ranges],

@@ -40,23 +40,22 @@ pub enum RelationalFailure {
 /// query planner could embed some of the numeric and logical computations into
 /// the individual filters to reduce the evaluation cost.
 fn evaluate_filter<'a, 'b: 'a>(
-    target: &'b source_file::SourceFile,
     ctx: &'a mut EvaluationContext<'b>,
     flt: &NodeFilter,
 ) -> anyhow::Result<(Value, Vec<tree_sitter::Range>)> {
     match flt {
         NodeFilter::Predicate(nm) => {
-            (nm.extract)(ctx, target.source.as_bytes())
+            (nm.extract)(ctx)
                 .map(|b| (Value::Constant(Constant::Boolean(b.value)), b.ranges))
                 .ok_or(anyhow::anyhow!(RelationalFailure::NoValue))
         }
         NodeFilter::NumericComputation(nm) => {
-            (nm.extract)(ctx, target.source.as_bytes())
+            (nm.extract)(ctx)
                 .map(|i| (Value::Constant(Constant::Integer(i.value)), i.ranges))
                 .ok_or(anyhow::anyhow!(RelationalFailure::NoValue))
         }
         NodeFilter::StringComputation(nm) => {
-            (nm.extract)(ctx, target.source.as_bytes())
+            (nm.extract)(ctx)
                 .map(|s| (Value::Constant(Constant::String_(s.value)), s.ranges))
                 .ok_or(anyhow::anyhow!(RelationalFailure::NoValue))
         }
@@ -66,8 +65,7 @@ fn evaluate_filter<'a, 'b: 'a>(
         NodeFilter::PredicateListComputation(nm) => {
             // We evaluate a list of predicates p as `any(p)` (i.e., it is true
             // if any of the predicates evaluates to true)
-            let ps = (nm.extract)(ctx, target.source.as_bytes());
-            for p in ps {
+            for p in (nm.extract)(ctx) {
                 if p.value {
                     let v = Value::Constant(Constant::Boolean(p.value));
                     return Ok((v, p.ranges));
@@ -137,7 +135,7 @@ pub fn evaluate_plan<'a>(
     plan: &'a CompiledQuery,
 ) -> anyhow::Result<Vec<QueryResult>> {
     // FIXME: Add rich error reporting here, with supportive logging in the main driver that consumes these results
-    let mut eval_ctx = EvaluationContext::new();
+    let mut eval_ctx = EvaluationContext::new(target.source.as_bytes());
     preprocess_file(
         &plan.file_preprocessing,
         ast,
@@ -154,7 +152,7 @@ pub fn evaluate_plan<'a>(
             for qm in cursor.matches(q, ast.root_node(), target.source.as_bytes()) {
                 let (accept_node, ranges) = {
                     eval_ctx.bind_node(root_var, qm.captures[0].node);
-                    let res = evaluate_filter(target, &mut eval_ctx, flt)?;
+                    let res = evaluate_filter(&mut eval_ctx, flt)?;
                     match res {
                         (Value::Constant(Constant::Boolean(b)), ranges) => (b, ranges),
                         (Value::Constant(_), _) => {

@@ -74,6 +74,8 @@ impl CallsiteRef {
 /// These are largely tables of objects that would have lifetimes too complex to
 /// track as references, so we track them by an integer ID instead
 pub struct EvaluationContext<'a> {
+    /// The bytes of the source file, which are used to interpret AST nodes
+    source_bytes: &'a [u8],
     /// All of the nodes corresponding to the Callable currently under
     /// evaluation
     callables: HashMap<CallableRef, Node<'a>>,
@@ -93,14 +95,19 @@ pub struct EvaluationContext<'a> {
 }
 
 impl<'a> EvaluationContext<'a> {
-    pub fn new() -> Self {
+    pub fn new(source: &'a [u8]) -> Self {
         EvaluationContext {
+            source_bytes: source,
             callables: HashMap::new(),
             parameters: HashMap::new(),
             expr_nodes: HashMap::new(),
             callsites: HashMap::new(),
             file_imports: None,
         }
+    }
+
+    pub fn get_source(&self) -> &'a [u8] {
+        self.source_bytes
     }
 
     pub fn add_expression_bindings(&mut self, bindings: Vec<(ExprRef, Node<'a>)>) {
@@ -162,19 +169,13 @@ impl<'a> EvaluationContext<'a> {
     }
 }
 
-impl<'a> Default for EvaluationContext<'a> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// An interface for providing a query and a processor for the results to
 /// produce a result of type `R`
 ///
 /// For example, a query might select argument nodes and the matcher could
 /// extract a list of argument structures.
 pub struct NodeMatcher<R> {
-    pub extract: Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> Option<WithRanges<R>>>,
+    pub extract: Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>) -> Option<WithRanges<R>>>,
 }
 
 /// A variant of `NodeMatcher` for sequences/relations
@@ -183,7 +184,7 @@ pub struct NodeMatcher<R> {
 /// `Option` to indicate failure. It can simply return an empty sequence.
 pub struct NodeListMatcher<R> {
     pub extract:
-        Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>, &'a [u8]) -> Vec<WithRanges<R>>>,
+        Rc<dyn for<'b, 'a> Fn(&'b mut EvaluationContext<'a>) -> Vec<WithRanges<R>>>,
 }
 
 /// A representation of language-level types (e.g., Java or C types)
