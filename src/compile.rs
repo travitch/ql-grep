@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::compile::errors::PlanError;
-use crate::compile::interface::{BoundNode, CallableRef, CallsiteRef, NodeMatcher, ParameterRef, TreeInterface};
+use crate::compile::interface::{CallableRef, CallsiteRef, NodeMatcher, ParameterRef, TreeInterface};
 use crate::compile::lift::transform_node_filter;
 use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
@@ -27,7 +27,7 @@ pub enum QueryAction {
     /// The string is the root variable bound by the query
     ///
     /// This may need to be generalized in more complex cases (or that might just trigger datalog mode)
-    TSQuery(NodeFilter, tree_sitter::Query, BoundNode),
+    TSQuery(NodeFilter, tree_sitter::Query, CallableRef),
     /// A trivial result that is a constant
     ConstantValue(Constant),
 }
@@ -659,7 +659,7 @@ pub fn compile_query(
                 .ok_or_else(|| anyhow::anyhow!(unsupported))?;
             let ts_query = tree_sitter::Query::new(ts_lang, &top_level.query)?;
             let flt = compile_expr(tree_interface, &query_plan.where_formula)?;
-            let bound_node = BoundNode::new(var, ty);
+            let bound_node = CallableRef::new(var);
             let p = CompiledQuery {
                 file_preprocessing: query_plan.file_preprocessing.clone(),
                 steps: QueryAction::TSQuery(flt, ts_query, bound_node),

@@ -45,29 +45,6 @@ impl ParameterRef {
     }
 }
 
-/// References to variables that can be bound to an initial tree sitter node
-///
-/// This is used to communicate the variable(s) that need to be initialized in
-/// the evaluator
-pub enum BoundNode {
-    Callable(CallableRef),
-}
-
-impl BoundNode {
-    /// Construct a BoundNode given a type
-    ///
-    /// Not everything is supported here (just what would appear in a select
-    /// clause)
-    pub fn new(name: &str, ty: &Type) -> Self {
-        match ty {
-            Type::Callable => BoundNode::Callable(CallableRef(name.into())),
-            Type::Function => BoundNode::Callable(CallableRef(name.into())),
-            Type::Method => BoundNode::Callable(CallableRef(name.into())),
-            _ => panic!("Unimplemented BoundNode type `{ty}`"),
-        }
-    }
-}
-
 /// A reference to an expression node
 ///
 /// The nodes themselves are stored in the `EvaluationContext` so that they can
@@ -148,12 +125,8 @@ impl<'a> EvaluationContext<'a> {
         self.callables.get(cr).unwrap()
     }
 
-    pub fn bind_node<'b>(&'b mut self, binder: &BoundNode, n: Node<'a>) {
-        match binder {
-            BoundNode::Callable(CallableRef(name)) => {
-                self.callables.insert(CallableRef(name.into()), n);
-            }
-        }
+    pub fn bind_node<'b>(&'b mut self, binder: &CallableRef, n: Node<'a>) {
+        self.callables.insert(binder.clone(), n);
     }
 
     pub fn lookup_parameter(&self, pr: &ParameterRef) -> &WithRanges<FormalArgument> {
