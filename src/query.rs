@@ -35,7 +35,7 @@ pub fn parse_query(text: impl AsRef<[u8]>) -> anyhow::Result<Select<Syntax>> {
 
 #[cfg(test)]
 fn var_ref(name: &str) -> Expr<Syntax> {
-    untyped(Expr_::VarRef(name.into()))
+    untyped(Expr_::VarRef(VarIdent::StringIdent(name.into())))
 }
 
 #[cfg(test)]
@@ -53,7 +53,7 @@ fn declare(vars: &[(Type, &str)]) -> Vec<VarDecl> {
     for (ty, var_name) in vars {
         let decl = VarDecl {
             type_: ty.clone(),
-            name: (*var_name).into(),
+            name: VarIdent::StringIdent((*var_name).into()),
         };
         res.push(decl);
     }
@@ -129,7 +129,7 @@ fn select_with_decls() {
     let r = parse_query(ql);
     let mut exprs = Vec::new();
     let as_expr = AsExpr {
-        expr: untyped(Expr_::VarRef("f".into())),
+        expr: untyped(Expr_::VarRef(VarIdent::StringIdent("f".into()))),
         ident: None,
     };
     exprs.push(as_expr);
@@ -214,7 +214,7 @@ fn select_filter_parameter_count() {
 
     let mut exprs = Vec::new();
     let as_expr = AsExpr {
-        expr: untyped(Expr_::VarRef("m".into())),
+        expr: untyped(Expr_::VarRef(VarIdent::StringIdent("m".into()))),
         ident: None,
     };
     exprs.push(as_expr);

@@ -4,6 +4,7 @@ use tree_sitter::Node;
 
 use crate::preprocess::{FileImportIndex, Import};
 use crate::query::val_type::Type;
+use crate::query::ir::VarIdent;
 use crate::with_ranges::WithRanges;
 
 pub struct TopLevelMatcher {
@@ -28,20 +29,20 @@ pub struct TopLevelMatcher {
 /// We also don't parse every node into a full data type because it would be far
 /// too expensive.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CallableRef(String);
+pub struct CallableRef(VarIdent);
 
 impl CallableRef {
-    pub fn new(var_name: &str) -> Self {
-        CallableRef(var_name.into())
+    pub fn new(var_name: VarIdent) -> Self {
+        CallableRef(var_name)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ParameterRef(String);
+pub struct ParameterRef(VarIdent);
 
 impl ParameterRef {
-    pub fn new(var_name: &str) -> Self {
-        ParameterRef(var_name.into())
+    pub fn new(var_name: VarIdent) -> Self {
+        ParameterRef(var_name)
     }
 }
 
@@ -61,10 +62,10 @@ impl ExprRef {
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
-pub struct CallsiteRef(String);
+pub struct CallsiteRef(VarIdent);
 
 impl CallsiteRef {
-    pub fn new(var_name: String) -> Self {
+    pub fn new(var_name: VarIdent) -> Self {
         CallsiteRef(var_name)
     }
 }

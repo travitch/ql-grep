@@ -11,7 +11,7 @@ pub enum PlanError {
     #[error("Unsupported type `{0:?}` for language {1:?}")]
     UnsupportedTypeForLanguage(Type, Language),
     #[error("Use of undefined variable `{0}`")]
-    UndeclaredVariable(String),
+    UndeclaredVariable(VarIdent),
     #[error("Invalid aggregate `{0:?}` with arity {1}")]
     InvalidAggregateArity(AggregateOp, usize),
     #[error("Querying {0} is not supported in {1} for this language")]
