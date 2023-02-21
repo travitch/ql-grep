@@ -114,6 +114,10 @@ pub enum Expr_<R: Repr> {
         op: EqualityOp,
         rhs: Box<Expr<R>>,
     },
+    /// The negation of a boolean expression
+    LogicalNegation {
+        predicate: Box<Expr<R>>,
+    },
     /// A conjunction of two boolean expressions
     LogicalConjunction {
         lhs: Box<Expr<R>>,
@@ -259,6 +263,11 @@ where
                     .append(RcDoc::space())
                     .append(rhs.to_doc())
                     .append(RcDoc::text(")")),
+            ),
+            Expr_::LogicalNegation { predicate } => parens(
+                RcDoc::text("not").append(RcDoc::hardline()).append(
+                    predicate.to_doc().nest(2)
+                ),
             ),
             Expr_::LogicalConjunction { lhs, rhs } => parens(
                 RcDoc::text("and").append(RcDoc::hardline()).append(

@@ -200,6 +200,16 @@ fn insert_explicit_binders(e: &Expr<Typed>) -> anyhow::Result<Expr<Typed>> {
             };
             Ok(e_b)
         }
+        Expr_::LogicalNegation { predicate } => {
+            let predicate_b = insert_explicit_binders(predicate)?;
+            let e_b = Expr {
+                expr: Expr_::LogicalNegation {
+                    predicate: Box::new(predicate_b),
+                },
+                type_: e.type_.clone(),
+            };
+            Ok(e_b)
+        }
         Expr_::LogicalConjunction { lhs, rhs } => {
             let lhs_b = insert_explicit_binders(lhs)?;
             let rhs_b = insert_explicit_binders(rhs)?;

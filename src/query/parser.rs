@@ -168,6 +168,13 @@ fn parse_expr<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::Resu
                 },
             }
         }
+        "negation" => {
+            // The child node is not actually labeled, so we can't reliably just
+            // grab it
+            let child_node = any_single_child(node)?;
+            let predicate = parse_expr(child_node, source)?;
+            Expr_::LogicalNegation { predicate: Box::new(predicate) }
+        }
         "conjunction" => {
             let lhs_node = node.child_by_field_name("left").ok_or_else(|| {
                 anyhow::anyhow!(QueryError::MalformedNode(
