@@ -127,7 +127,6 @@ impl<'a> EvaluationContext<'a> {
     }
 
     pub fn add_expression_bindings(&mut self, bindings: Vec<(ExprRef, Node<'a>)>) {
-        // self.expr_nodes.extend(bindings.iter());
         for (eref, node) in bindings {
             self.expr_nodes.insert(eref, node);
         }
