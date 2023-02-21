@@ -26,8 +26,8 @@ fn call_get_target(
         NodeFilter::CallsiteComputation(c) => {
             let get_callsite = Rc::clone(&c.extract);
             let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_callsite(ctx, source).map(|callsite_res| {
+                extract: Rc::new(move |ctx| {
+                    get_callsite(ctx).map(|callsite_res| {
                         WithRanges::new(callsite_res.value.target_name.clone(), vec![callsite_res.ranges])
                     })
                 }),
@@ -64,8 +64,8 @@ fn call_get_argument(
                 _ => panic!("Invalid argument to Call.getArgument"),
             };
             let comp = NodeMatcher {
-                extract: Rc::new(move |ctx, source| {
-                    get_callsite(ctx, source).map(|callsite_res| {
+                extract: Rc::new(move |ctx| {
+                    get_callsite(ctx).map(|callsite_res| {
                         let arg_list = callsite_res.value.arguments;
                         if arg_idx < arg_list.len() {
                             Some(WithRanges::value(arg_list[arg_idx]))
