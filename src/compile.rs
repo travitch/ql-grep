@@ -466,6 +466,27 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
             compile_equality_comparison(lhs_f, *op, rhs_f)
         }
+        Expr_::LogicalNegation { predicate } => {
+            assert!(predicate.type_ == Type::PrimBoolean);
+            let predicate_f = compile_expr(Rc::clone(&ti), predicate)?;
+            match predicate_f {
+                NodeFilter::Predicate(predicate_p) => {
+                    let m = NodeMatcher {
+                        extract: Rc::new(move |ctx, source| {
+                            (predicate_p.extract)(ctx, source).map(|mut b_ranges| {
+                                b_ranges.value = !b_ranges.value;
+                                b_ranges
+                            })
+                        }),
+                    };
+
+                    Ok(NodeFilter::Predicate(m))
+                }
+                nf => {
+                    panic!("Impossible type for logical negation: {}", nf.kind());
+                }
+            }
+        }
         Expr_::LogicalConjunction { lhs, rhs } => {
             assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
             let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;

@@ -235,6 +235,25 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
                 type_: ret_ty,
             })
         }
+        Expr_::LogicalNegation { predicate } => {
+            let pred_ty = typecheck_expr(env, predicate)?;
+
+            if !evaluates_to_boolean(&pred_ty.type_) {
+                return Err(anyhow::anyhow!(TypecheckError::UnexpectedExpressionType(
+                    *predicate.clone(),
+                    Type::PrimBoolean,
+                    pred_ty.type_
+                )));
+            }
+
+            let ret_ty = promote_return(&Type::PrimBoolean, &vec![&pred_ty.type_]);
+            Ok(Expr {
+                expr: Expr_::LogicalNegation {
+                    predicate: Box::new(pred_ty)
+                },
+                type_: ret_ty
+            })
+        }
         Expr_::LogicalConjunction { lhs, rhs } => {
             let lhs_ty = typecheck_expr(env, lhs)?;
             let rhs_ty = typecheck_expr(env, rhs)?;

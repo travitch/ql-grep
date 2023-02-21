@@ -1,0 +1,10 @@
+# Test that negation works by finding printf calls that do not have a literal format string
+
+query = """
+from Function f, Call c
+where c = f.getACall() and (c.getTarget() = "printf" and not c.getArgument(0).isStringLiteral())
+select f
+"""
+
+codebase = "feature/0015-printf-non-literal-format"
+num_matches = 1
