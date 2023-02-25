@@ -64,6 +64,15 @@ pub struct VarDecl {
     pub name: VarIdent,
 }
 
+impl VarDecl {
+    pub fn new(n: VarIdent, ty: Type) -> Self {
+        VarDecl {
+            name: n,
+            type_: ty,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CompOp {
     LT,
