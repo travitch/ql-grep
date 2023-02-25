@@ -1,7 +1,6 @@
 pub mod backend;
 mod errors;
 pub mod interface;
-mod lift;
 mod method_library;
 pub mod node_filter;
 
@@ -9,8 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::compile::errors::PlanError;
-use crate::compile::interface::{CallableRef, CallsiteRef, NodeMatcher, ParameterRef, TreeInterface};
-use crate::compile::lift::transform_node_filter;
+use crate::compile::interface::{CallableRef, CallsiteRef, ImportRef, NodeMatcher, ParameterRef, TreeInterface};
 use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
 use crate::plan::QueryPlan;
@@ -118,6 +116,16 @@ fn compile_var_ref(var_name: &VarIdent, var_type: &Type) -> anyhow::Result<NodeF
                 }),
             };
             Ok(NodeFilter::CallsiteComputation(m))
+        }
+        Type::Import => {
+            let this_var_name = var_name.clone();
+            let m = NodeMatcher {
+                extract: Rc::new(move |ctx| {
+                    let import_ref = ImportRef::new(this_var_name.clone());
+                    Some(ctx.lookup_import(&import_ref).clone())
+                }),
+            };
+            Ok(NodeFilter::ImportComputation(m))
         }
         ty => {
             let msg = format!("References to variables of type `{ty}` are not yet supported");
@@ -283,76 +291,6 @@ fn compile_equality_comparison(
                 }
             }
         }
-        (NodeFilter::StringListComputation(lhs_s), NodeFilter::StringComputation(rhs_s)) => {
-            match op {
-                EqualityOp::EQ => {
-                    let rhs_fn = Rc::clone(&rhs_s.extract);
-                    let lifted = transform_node_filter(
-                        Type::PrimBoolean,
-                        &NodeFilter::StringListComputation(lhs_s),
-                        Rc::new(move |elt: Rc<NodeFilter>| {
-                            let rhs_fn_ref = Rc::clone(&rhs_fn);
-                            match &*elt {
-                                NodeFilter::StringComputation(sc) => {
-                                    let sc_ref = Rc::clone(&sc.extract);
-                                    let m = NodeMatcher {
-                                        extract: Rc::new(move |ctx| {
-                                            sc_ref(ctx).map(|lhs_result| {
-                                                rhs_fn_ref(ctx).map(|rhs_result| {
-                                                    WithRanges::new(
-                                                        lhs_result.value == rhs_result.value,
-                                                        vec![lhs_result.ranges, rhs_result.ranges],
-                                                    )
-                                                })
-                                            }).flatten()
-                                        }),
-                                    };
-                                    Ok(NodeFilter::Predicate(m))
-                                }
-                                _ => {
-                                    panic!("Invalid branch, expected a string computation")
-                                }
-                            }
-                        }),
-                    )
-                    .unwrap();
-                    Ok(lifted)
-                }
-                EqualityOp::NE => {
-                    let rhs_fn = Rc::clone(&rhs_s.extract);
-                    let lifted = transform_node_filter(
-                        Type::PrimBoolean,
-                        &NodeFilter::StringListComputation(lhs_s),
-                        Rc::new(move |elt: Rc<NodeFilter>| {
-                            let rhs_fn_ref = Rc::clone(&rhs_fn);
-                            match &*elt {
-                                NodeFilter::StringComputation(sc) => {
-                                    let sc_ref = Rc::clone(&sc.extract);
-                                    let m = NodeMatcher {
-                                        extract: Rc::new(move |ctx| {
-                                            sc_ref(ctx).map(|lhs_result| {
-                                                rhs_fn_ref(ctx).map(|rhs_result| {
-                                                    WithRanges::new(
-                                                        lhs_result.value != rhs_result.value,
-                                                        vec![lhs_result.ranges, rhs_result.ranges],
-                                                    )
-                                                })
-                                            }).flatten()
-                                        }),
-                                    };
-                                    Ok(NodeFilter::Predicate(m))
-                                }
-                                _ => {
-                                    panic!("Invalid branch, expected a string computation")
-                                }
-                            }
-                        }),
-                    )
-                    .unwrap();
-                    Ok(lifted)
-                }
-            }
-        }
         _ => {
             panic!("Impossible equality comparison");
         }
@@ -424,6 +362,41 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                         }),
                     };
 
+                    Ok(NodeFilter::Predicate(m))
+                }
+                NodeFilter::ImportListComputation(import_comp) => {
+                    let import_ref = ImportRef::new(bound_var.name.clone());
+                    let m = NodeMatcher {
+                        extract: Rc::new(move |ctx| {
+                            let import_ref_inner = import_ref.clone();
+                            let mut collected_ranges = Vec::new();
+                            let imports = (import_comp.extract)(ctx);
+                            for import in imports {
+                                ctx.bind_import(&import_ref_inner, import.clone());
+                                // NOTE: This short circuits evaluation once any
+                                // match is found. That is only desirable if the
+                                // enclosing construct (e.g., a function) is the
+                                // thing being selected.
+                                match (eval_func.extract)(ctx) {
+                                    Some(mut this_result) => {
+                                        if this_result.value {
+                                            return Some(this_result);
+                                        }
+
+                                        // These ranges are only used if *all* of the
+                                        // arguments fail to satisfy the predicate
+                                        collected_ranges.append(&mut this_result.ranges);
+                                    }
+                                    None => {}
+                                }
+                            }
+
+                            Some(WithRanges {
+                                value: false,
+                                ranges: collected_ranges,
+                            })
+                        }),
+                    };
                     Ok(NodeFilter::Predicate(m))
                 }
                 NodeFilter::CallsiteListComputation(callsite_comp) => {
@@ -598,19 +571,9 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             match handler {
                 Some(Handler(f)) => {
                     let base_comp = compile_expr(Rc::clone(&ti), base)?;
-                    // If this is a list type, lift via
-                    // `transform_node_filter`. Otherwise, just evaluate
-                    // directly
-                    let target_type = e.type_.clone();
                     let ops1 = operands.clone();
-                    let ops2 = operands.clone();
                     let ti1 = Rc::clone(&ti);
-                    transform_node_filter(
-                        target_type,
-                        &base_comp,
-                        Rc::new(move |elt: Rc<NodeFilter>| f(Rc::clone(&ti1), &elt, &ops1)),
-                    )
-                    .map_or_else(|| f(Rc::clone(&ti), &base_comp, &ops2), Ok)
+                    f(Rc::clone(&ti), &base_comp, &ops1)
                 }
                 None => {
                     panic!(

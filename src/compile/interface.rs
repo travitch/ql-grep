@@ -70,6 +70,15 @@ impl CallsiteRef {
     }
 }
 
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct ImportRef(VarIdent);
+
+impl ImportRef {
+    pub fn new(var_name: VarIdent) -> Self {
+        ImportRef(var_name)
+    }
+}
+
 /// All of the context needed during evaluation
 ///
 /// These are largely tables of objects that would have lifetimes too complex to
@@ -86,6 +95,8 @@ pub struct EvaluationContext<'a> {
     expr_nodes: HashMap<ExprRef, Node<'a>>,
     /// Callsites bound to variables
     callsites: HashMap<CallsiteRef, WithRanges<Callsite>>,
+    /// Imports bound to variables
+    imports: HashMap<ImportRef, WithRanges<Import>>,
     /// The index of the imports in the current file
     ///
     /// This is an `Option` to distinguish the case of "did not run the
@@ -103,12 +114,21 @@ impl<'a> EvaluationContext<'a> {
             parameters: HashMap::new(),
             expr_nodes: HashMap::new(),
             callsites: HashMap::new(),
+            imports: HashMap::new(),
             file_imports: None,
         }
     }
 
     pub fn get_source(&self) -> &'a [u8] {
         self.source_bytes
+    }
+
+    pub fn lookup_import(&self, import_ref: &ImportRef) -> &WithRanges<Import> {
+        self.imports.get(import_ref).unwrap()
+    }
+
+    pub fn bind_import(&mut self, import_ref: &ImportRef, import: WithRanges<Import>) {
+        self.imports.insert(import_ref.clone(), import);
     }
 
     pub fn add_expression_bindings(&mut self, bindings: Vec<(ExprRef, Node<'a>)>) {
