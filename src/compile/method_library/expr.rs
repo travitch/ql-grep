@@ -5,7 +5,6 @@ use std::sync::Arc;
 use crate::compile::interface::{NodeMatcher, TreeInterface};
 use crate::compile::method_library::handler::Handler;
 use crate::compile::NodeFilter;
-use crate::query::ir::*;
 use crate::query::val_type::Type;
 use crate::with_ranges::WithRanges;
 
@@ -16,7 +15,7 @@ use crate::with_ranges::WithRanges;
 fn expr_is_string_literal(
     ti: Rc<dyn TreeInterface>,
     base: &NodeFilter,
-    operands: &Vec<Expr<Typed>>,
+    operands: &Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {

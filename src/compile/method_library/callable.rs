@@ -6,7 +6,6 @@ use crate::compile::errors::PlanError;
 use crate::compile::interface::TreeInterface;
 use crate::compile::method_library::handler::Handler;
 use crate::compile::NodeFilter;
-use crate::query::ir::*;
 
 /// Get the name of a callable using the language interface
 ///
@@ -17,7 +16,7 @@ use crate::query::ir::*;
 fn callable_get_name<'a>(
     ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     // This is not necessarily an assertion, as this may not be supported for
@@ -44,7 +43,7 @@ fn callable_get_name<'a>(
 fn callable_get_a_parameter<'a>(
     ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {
@@ -69,7 +68,7 @@ fn callable_get_a_parameter<'a>(
 fn callable_has_parse_error<'a>(
     ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {
@@ -92,7 +91,7 @@ fn callable_has_parse_error<'a>(
 fn callable_get_return_type<'a>(
     ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {
@@ -120,7 +119,7 @@ fn callable_get_return_type<'a>(
 fn callable_get_file<'a>(
     _ti: Rc<dyn TreeInterface>,
     _base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     Ok(NodeFilter::FileComputation)
@@ -135,7 +134,7 @@ fn callable_get_file<'a>(
 fn callable_call_sites<'a>(
     ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {

@@ -5,7 +5,6 @@ use std::sync::Arc;
 use crate::compile::interface::{LanguageType, NodeMatcher, TreeInterface};
 use crate::compile::method_library::handler::Handler;
 use crate::compile::NodeFilter;
-use crate::query::ir::*;
 use crate::query::val_type::Type;
 use crate::with_ranges::WithRanges;
 
@@ -17,7 +16,7 @@ use crate::with_ranges::WithRanges;
 fn parameter_get_name<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {
@@ -51,7 +50,7 @@ fn parameter_get_name<'a>(
 fn parameter_get_type<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {
@@ -86,7 +85,7 @@ fn parameter_get_type<'a>(
 fn parameter_get_index<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {
