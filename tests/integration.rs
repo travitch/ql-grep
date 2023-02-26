@@ -13,6 +13,8 @@ use ql_grep::{
 };
 
 /// A single test case to run ql-grep over, with expected results
+///
+/// The on-disk format is TOML [tag:toml-test-cases]
 #[derive(Deserialize)]
 struct TestCase {
     /// The query to run

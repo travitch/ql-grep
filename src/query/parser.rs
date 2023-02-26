@@ -381,6 +381,8 @@ fn parse_var_decl<'a>(node: tree_sitter::Node<'a>, source: &'a [u8]) -> anyhow::
 ///
 /// This parser uses simple recursive descent, as Tree Sitter has already
 /// resolved all of the interesting precedence parsing challenges.
+///
+/// [tag:codeql-query-parser]
 pub fn parse_query_ast(
     ast: &tree_sitter::Tree,
     source: impl AsRef<[u8]>,
