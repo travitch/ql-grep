@@ -460,7 +460,8 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             }
         }
         Expr_::LogicalConjunction { lhs, rhs } => {
-            assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean);
+            assert!(lhs.type_ == Type::PrimBoolean && rhs.type_ == Type::PrimBoolean,
+                "Expected boolean operands but got lhs: {}, rhs: {}", lhs.type_, rhs.type_);
             let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
             let rhs_f = compile_expr(Rc::clone(&ti), rhs)?;
             match (lhs_f, rhs_f) {
