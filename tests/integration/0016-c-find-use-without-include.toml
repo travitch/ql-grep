@@ -1,0 +1,16 @@
+# Find uses of strcmp in a C/C++ file that does not include string.h
+#
+# This is useful for ensuring include hygiene (i.e., that files do not depend on
+# transitive includes to compile)
+#
+# This tests that the relational rewriting works and that the
+# typechecking/compilation/evaluation around relational values works as expected.
+
+query = """
+from Function f
+where f.getACall().getTarget() = "strcmp" and not (f.getFile().getAnImport().getName() = "string.h")
+select f
+"""
+
+codebase = "feature/0016-c-find-use-without-include"
+num_matches = 2
