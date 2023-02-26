@@ -469,6 +469,8 @@ pub struct TypedQuery {
 ///
 /// The return types for methods (which are otherwise not obvious) are
 /// automatically derived from the documentation (see `library.kdl`)
+///
+/// [tag:typechecking-pass]
 pub fn typecheck_query(syntax: &Select<Syntax>) -> anyhow::Result<TypedQuery> {
     // Note that the type environment never really updates because new
     // identifiers are not introduced outside of the declaration clause

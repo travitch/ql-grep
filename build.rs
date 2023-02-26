@@ -6,6 +6,8 @@ fn main() {
 
     // Note that this grammar is slightly special - we don't support it as a
     // search target, but we use it to parse user queries
+    //
+    // [tag:tree-sitter-ql-grammar-build]
     let ql_dir: PathBuf = ["third_party", "tree-sitter-ql", "src"].iter().collect();
     cc::Build::new()
         .include(&ql_dir)

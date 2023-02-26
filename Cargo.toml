@@ -30,13 +30,16 @@ tree-sitter-c = "^0.20"
 tree-sitter-cpp = "^0.20"
 tree-sitter-java = "^0.20"
 
-# Required for tree-sitter
+# Required for building the tree-sitter-ql submodule, which is not available on crates.io
+#
+# See [ref:tree-sitter-ql-grammar-build]
 [build-dependencies]
 cc="^1.0"
 
 [dev-dependencies]
 serde = { version = "^1", features = ["derive"] }
 test-generator = "^0.3"
+# Used to specify the expected formats of tests (see [ref:toml-test-cases])
 toml = "^0.5"
 
 [lib]
