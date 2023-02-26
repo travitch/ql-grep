@@ -246,12 +246,11 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
                 )));
             }
 
-            let ret_ty = promote_return(&Type::PrimBoolean, &vec![&pred_ty.type_]);
             Ok(Expr {
                 expr: Expr_::LogicalNegation {
                     predicate: Box::new(pred_ty)
                 },
-                type_: ret_ty
+                type_: Type::PrimBoolean,
             })
         }
         Expr_::LogicalConjunction { lhs, rhs } => {
@@ -274,13 +273,12 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
                 )));
             }
 
-            let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::LogicalConjunction {
                     lhs: Box::new(lhs_ty),
                     rhs: Box::new(rhs_ty),
                 },
-                type_: ret_ty,
+                type_: Type::PrimBoolean,
             })
         }
         Expr_::LogicalDisjunction { lhs, rhs } => {
@@ -304,13 +302,12 @@ fn typecheck_expr(env: &mut TypeEnv, expr: &Expr<Syntax>) -> anyhow::Result<Expr
                 )));
             }
 
-            let ret_ty = promote_return(&Type::PrimBoolean, &vec![&lhs_ty.type_, &rhs_ty.type_]);
             Ok(Expr {
                 expr: Expr_::LogicalDisjunction {
                     lhs: Box::new(lhs_ty),
                     rhs: Box::new(rhs_ty),
                 },
-                type_: ret_ty,
+                type_: Type::PrimBoolean,
             })
         }
         Expr_::Aggregate { op, operands } => {
