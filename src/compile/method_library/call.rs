@@ -5,7 +5,6 @@ use std::sync::Arc;
 use crate::compile::interface::{NodeMatcher, TreeInterface};
 use crate::compile::method_library::handler::Handler;
 use crate::compile::NodeFilter;
-use crate::query::ir::*;
 use crate::query::val_type::Type;
 use crate::with_ranges::WithRanges;
 
@@ -19,7 +18,7 @@ use crate::with_ranges::WithRanges;
 fn call_get_target(
     _ti: Rc<dyn TreeInterface>,
     base: &NodeFilter,
-    operands: &Vec<Expr<Typed>>,
+    operands: &Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {
@@ -47,31 +46,29 @@ fn call_get_target(
 fn call_get_argument(
     _ti: Rc<dyn TreeInterface>,
     base: &NodeFilter,
-    operands: &Vec<Expr<Typed>>,
+    operands: &Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.len() == 1);
     match base {
         NodeFilter::CallsiteComputation(c) => {
             let get_callsite = Rc::clone(&c.extract);
-            let arg_idx = match operands[0].expr {
-                Expr_::ConstantExpr(Constant::Integer(i)) => {
-                    assert!(i >= 0);
-                    i as usize
-                },
-                // FIXME: Argument lists should be evaluated into NodeFilters at
-                // this point so that we can just execute it to get a concrete
-                // value
-                _ => panic!("Invalid argument to Call.getArgument"),
+            let get_arg_idx = match &operands[0] {
+                NodeFilter::NumericComputation(num_comp) => Rc::clone(&num_comp.extract),
+                nf => panic!("Invalid operand type: {}", nf.kind()),
             };
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx| {
-                    get_callsite(ctx).map(|callsite_res| {
-                        let arg_list = callsite_res.value.arguments;
-                        if arg_idx < arg_list.len() {
-                            Some(WithRanges::value(arg_list[arg_idx]))
-                        } else {
-                            None
-                        }
+                    get_arg_idx(ctx).map(|arg_idx_i| {
+                        get_callsite(ctx).map(|callsite_res| {
+                            let arg_list = callsite_res.value.arguments;
+                            assert!(arg_idx_i.value >= 0);
+                            let arg_idx = arg_idx_i.value as usize;
+                            if arg_idx < arg_list.len() {
+                                Some(WithRanges::value(arg_list[arg_idx]))
+                            } else {
+                                None
+                            }
+                        }).flatten()
                     }).flatten()
                 }),
             };

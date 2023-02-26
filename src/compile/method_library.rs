@@ -13,7 +13,6 @@ use crate::compile::interface::{NodeListMatcher, NodeMatcher, TreeInterface};
 use crate::compile::NodeFilter;
 use crate::library::index::{library_index, MethodSignature};
 use crate::library::Status;
-use crate::query::ir::*;
 use crate::query::val_type::Type;
 use crate::with_ranges::WithRanges;
 pub use crate::compile::method_library::handler::Handler;
@@ -29,31 +28,30 @@ use crate::compile::method_library::parameter::PARAMETER_METHODS;
 fn string_regexp_match<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.len() == 1);
     // The base must be a string computation (and we require that it was a literal that we were able to already compile)
-    let c = match base {
+    let string_comp = match base {
         NodeFilter::StringComputation(c) => c,
-        _ => panic!("Invalid base computation for `regexpMatch`"),
+        nf => panic!("Invalid base computation for `regexpMatch`, got `{}`", nf.kind()),
     };
-    let rx: regex::Regex = match &operands[0].expr {
-        Expr_::ConstantExpr(Constant::Regex(CachedRegex(_, rx))) => rx.clone(),
-        _ => {
-            // This should have been caught during type checking, which promotes
-            // literal strings to regexes where needed.
-            panic!("Invalid regex for `regexpMatch`")
-        }
+    let rx_comp = match &operands[0] {
+        NodeFilter::RegexComputation(r) => r,
+        nf => panic!("Invalid computation type for regular expression, got `{}`", nf.kind()),
     };
-    let get_string = Rc::clone(&c.extract);
+    let get_string = Rc::clone(&string_comp.extract);
+    let get_rx = Rc::clone(&rx_comp.extract);
     let comp = NodeMatcher {
         extract: Rc::new(move |ctx| {
-            get_string(ctx).map(|matched_string| {
-                WithRanges::new(
-                    rx.is_match(matched_string.value.as_ref()),
-                    vec![matched_string.ranges],
-                )
-            })
+            get_rx(ctx).map(|rx| {
+                get_string(ctx).map(|matched_string| {
+                    WithRanges::new(
+                        rx.value.1.is_match(matched_string.value.as_ref()),
+                        vec![matched_string.ranges],
+                    )
+                })
+            }).flatten()
         }),
     };
     Ok(NodeFilter::Predicate(comp))
@@ -66,7 +64,7 @@ fn string_regexp_match<'a>(
 fn type_get_name<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {
@@ -101,7 +99,7 @@ fn type_get_name<'a>(
 fn file_get_an_import<'a>(
     _ti: Rc<dyn TreeInterface>,
     _base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     let comp = NodeListMatcher {
@@ -123,7 +121,7 @@ fn file_get_an_import<'a>(
 fn import_get_name<'a>(
     _ti: Rc<dyn TreeInterface>,
     base: &'a NodeFilter,
-    operands: &'a Vec<Expr<Typed>>,
+    operands: &'a Vec<NodeFilter>,
 ) -> anyhow::Result<NodeFilter> {
     assert!(operands.is_empty());
     match base {

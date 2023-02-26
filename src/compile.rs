@@ -571,7 +571,9 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             match handler {
                 Some(Handler(f)) => {
                     let base_comp = compile_expr(Rc::clone(&ti), base)?;
-                    let ops1 = operands.clone();
+                    let ops1 = operands.iter()
+                        .map(|op| compile_expr(Rc::clone(&ti), op).unwrap())
+                        .collect();
                     f(Rc::clone(&ti), &base_comp, &ops1)
                 }
                 None => {
