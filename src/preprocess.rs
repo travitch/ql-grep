@@ -45,6 +45,9 @@ pub enum Import {
     /// An unqualified import (at least for Java). Note that this is currently
     /// used for all imports; Java imports could be broken down into more types
     Import(String),
+    /// An import that couldn't be interpreted and is just the raw syntax from
+    /// tree-sitter (most likely from C/C++ with unexpanded CPP in the include).
+    RawImport(String),
 }
 
 impl ToString for Import {
@@ -53,6 +56,7 @@ impl ToString for Import {
             Import::IncludeSystem(s) => s.clone(),
             Import::IncludeLocal(s) => s.clone(),
             Import::Import(s) => s.clone(),
+            Import::RawImport(s) => s.clone(),
         }
     }
 }

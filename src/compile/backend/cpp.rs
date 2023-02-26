@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use tracing::error;
+use tracing::{error, warn};
 use tree_sitter::Node;
 
 use crate::compile::interface::*;
@@ -16,17 +16,21 @@ impl CPPTreeInterface {
     }
 }
 
-fn parse_include_string(s: &str) -> Option<Import> {
+fn parse_include_string(s: &str) -> Import {
     if s.starts_with('"') {
         let name = s.strip_prefix('"').unwrap().strip_suffix('"').unwrap();
-        let imp = Import::IncludeLocal(name.into());
-        Some(imp)
+        Import::IncludeLocal(name.into())
     } else if s.starts_with('<') {
         let name = s.strip_prefix('<').unwrap().strip_suffix('>').unwrap();
-        let imp = Import::IncludeSystem(name.into());
-        Some(imp)
+        Import::IncludeSystem(name.into())
     } else {
-        None
+        // In this case, we can't interpret the include.  This is likely because the
+        // included token is actually a CPP token that would be expanded, but which tree-sitter
+        // cannot see.
+        //
+        // Instead of erroring, we preserve the raw included token.
+        warn!("Could not parse include path: `{}`", s);
+        Import::RawImport(s.into())
     }
 }
 
@@ -58,7 +62,7 @@ impl TreeInterface for CPPTreeInterface {
             qm.captures[0].node.utf8_text(source).map_or_else(
                 |_e| error!("Error decoding source as UTF-8 for include"),
                 |s| {
-                    import_index.add(parse_include_string(s).unwrap());
+                    import_index.add(parse_include_string(s));
                 },
             );
         });
@@ -373,11 +377,11 @@ fn parameter_node_to_argument<'a>(n: &'a Node, src: &'a [u8], idx: usize) -> For
 #[test]
 fn test_parse_system_include() {
     let expected = Import::IncludeSystem("stdint.h".into());
-    assert_eq!(Some(expected), parse_include_string("<stdint.h>"));
+    assert_eq!(expected, parse_include_string("<stdint.h>"));
 }
 
 #[test]
 fn test_parse_local_include() {
     let expected = Import::IncludeLocal("foo.h".into());
-    assert_eq!(Some(expected), parse_include_string("\"foo.h\""));
+    assert_eq!(expected, parse_include_string("\"foo.h\""));
 }
