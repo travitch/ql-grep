@@ -183,8 +183,8 @@ fn decompose_relational_expression(
                     let var_ident = plan_env.fresh_var(fresh_var_ty.clone());
                     let var_decl = VarDecl::new(var_ident.clone(), fresh_var_ty.clone());
                     let var_ref = Expr {
-                        expr: Expr_::VarRef(var_ident.clone()),
-                        type_: fresh_var_ty.clone(),
+                        expr: Expr_::VarRef(var_ident),
+                        type_: fresh_var_ty,
                     };
                     let decomp = DecomposedRelationalExpression {
                         fresh_var: var_decl,

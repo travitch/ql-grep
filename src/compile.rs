@@ -147,14 +147,14 @@ fn compile_relational_comparison(
                 CompOp::LT => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx| {
-                            lhs_f(ctx).map(|lhs_result| {
+                            lhs_f(ctx).and_then(|lhs_result| {
                                 rhs_f(ctx).map(|rhs_result| {
                                     WithRanges::new(
                                         lhs_result.value < rhs_result.value,
                                         vec![lhs_result.ranges, rhs_result.ranges],
                                     )
                                 })
-                            }).flatten()
+                            })
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -162,14 +162,14 @@ fn compile_relational_comparison(
                 CompOp::LE => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx| {
-                            lhs_f(ctx).map(|lhs_result| {
+                            lhs_f(ctx).and_then(|lhs_result| {
                                 rhs_f(ctx).map(|rhs_result| {
                                     WithRanges::new(
                                         lhs_result.value <= rhs_result.value,
                                         vec![lhs_result.ranges, rhs_result.ranges],
                                     )
                                 })
-                            }).flatten()
+                            })
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -177,14 +177,14 @@ fn compile_relational_comparison(
                 CompOp::GT => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx| {
-                            lhs_f(ctx).map(|lhs_result| {
+                            lhs_f(ctx).and_then(|lhs_result| {
                                 rhs_f(ctx).map(|rhs_result| {
                                     WithRanges::new(
                                         lhs_result.value > rhs_result.value,
                                         vec![lhs_result.ranges, rhs_result.ranges],
                                     )
                                 })
-                            }).flatten()
+                            })
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -192,14 +192,14 @@ fn compile_relational_comparison(
                 CompOp::GE => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx| {
-                            lhs_f(ctx).map(|lhs_result| {
+                            lhs_f(ctx).and_then(|lhs_result| {
                                 rhs_f(ctx).map(|rhs_result| {
                                     WithRanges::new(
                                         lhs_result.value >= rhs_result.value,
                                         vec![lhs_result.ranges, rhs_result.ranges],
                                     )
                                 })
-                            }).flatten()
+                            })
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -226,14 +226,14 @@ fn compile_equality_comparison(
                 EqualityOp::EQ => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx| {
-                            lhs_f(ctx).map(|lhs_result| {
+                            lhs_f(ctx).and_then(|lhs_result| {
                                 rhs_f(ctx).map(|rhs_result| {
                                     WithRanges::new(
                                         lhs_result.value == rhs_result.value,
                                         vec![lhs_result.ranges, rhs_result.ranges],
                                     )
                                 })
-                            }).flatten()
+                            })
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -241,14 +241,14 @@ fn compile_equality_comparison(
                 EqualityOp::NE => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx| {
-                            lhs_f(ctx).map(|lhs_result| {
+                            lhs_f(ctx).and_then(|lhs_result| {
                                 rhs_f(ctx).map(|rhs_result| {
                                     WithRanges::new(
                                         lhs_result.value != rhs_result.value,
                                         vec![lhs_result.ranges, rhs_result.ranges],
                                     )
                                 })
-                            }).flatten()
+                            })
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -262,14 +262,14 @@ fn compile_equality_comparison(
                 EqualityOp::EQ => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx| {
-                            lhs_f(ctx).map(|lhs_result| {
+                            lhs_f(ctx).and_then(|lhs_result| {
                                 rhs_f(ctx).map(|rhs_result| {
                                     WithRanges::new(
                                         lhs_result.value == rhs_result.value,
                                         vec![lhs_result.ranges, rhs_result.ranges],
                                     )
                                 })
-                            }).flatten()
+                            })
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -277,14 +277,14 @@ fn compile_equality_comparison(
                 EqualityOp::NE => {
                     let m = NodeMatcher {
                         extract: Rc::new(move |ctx| {
-                            lhs_f(ctx).map(|lhs_result| {
+                            lhs_f(ctx).and_then(|lhs_result| {
                                 rhs_f(ctx).map(|rhs_result| {
                                     WithRanges::new(
                                         lhs_result.value != rhs_result.value,
                                         vec![lhs_result.ranges, rhs_result.ranges],
                                     )
                                 })
-                            }).flatten()
+                            })
                         }),
                     };
                     Ok(NodeFilter::Predicate(m))
@@ -341,17 +341,14 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                                 // match is found. That is only desirable if the
                                 // enclosing construct (e.g., a function) is the
                                 // thing being selected.
-                                match (eval_func.extract)(ctx) {
-                                    Some(mut this_result) => {
-                                        if this_result.value {
-                                            return Some(this_result);
-                                        }
-
-                                        // These ranges are only used if *all* of the
-                                        // arguments fail to satisfy the predicate
-                                        collected_ranges.append(&mut this_result.ranges);
+                                if let Some(mut this_result) = (eval_func.extract)(ctx) {
+                                    if this_result.value {
+                                        return Some(this_result);
                                     }
-                                    None => {}
+
+                                    // These ranges are only used if *all* of the
+                                    // arguments fail to satisfy the predicate
+                                    collected_ranges.append(&mut this_result.ranges);
                                 }
                             }
 
@@ -377,17 +374,14 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                                 // match is found. That is only desirable if the
                                 // enclosing construct (e.g., a function) is the
                                 // thing being selected.
-                                match (eval_func.extract)(ctx) {
-                                    Some(mut this_result) => {
-                                        if this_result.value {
-                                            return Some(this_result);
-                                        }
-
-                                        // These ranges are only used if *all* of the
-                                        // arguments fail to satisfy the predicate
-                                        collected_ranges.append(&mut this_result.ranges);
+                                if let Some(mut this_result) = (eval_func.extract)(ctx) {
+                                    if this_result.value {
+                                        return Some(this_result);
                                     }
-                                    None => {}
+
+                                    // These ranges are only used if *all* of the
+                                    // arguments fail to satisfy the predicate
+                                    collected_ranges.append(&mut this_result.ranges);
                                 }
                             }
 
@@ -408,15 +402,11 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
                             let callsites = (callsite_comp.extract)(ctx);
                             for callsite in callsites {
                                 ctx.bind_callsite(&this_ref, &callsite);
-                                match (eval_func.extract)(ctx) {
-                                    Some(mut this_result) => {
-                                        if this_result.value {
-                                            return Some(this_result);
-                                        }
-
-                                        collected_ranges.append(&mut this_result.ranges);
+                                if let Some(mut this_result) = (eval_func.extract)(ctx) {
+                                    if this_result.value {
+                                        return Some(this_result);
                                     }
-                                    None => {}
+                                    collected_ranges.append(&mut this_result.ranges);
                                 }
                             }
 
