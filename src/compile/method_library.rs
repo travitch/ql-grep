@@ -44,14 +44,14 @@ fn string_regexp_match<'a>(
     let get_rx = Rc::clone(&rx_comp.extract);
     let comp = NodeMatcher {
         extract: Rc::new(move |ctx| {
-            get_rx(ctx).map(|rx| {
+            get_rx(ctx).and_then(|rx| {
                 get_string(ctx).map(|matched_string| {
                     WithRanges::new(
                         rx.value.1.is_match(matched_string.value.as_ref()),
                         vec![matched_string.ranges],
                     )
                 })
-            }).flatten()
+            })
         }),
     };
     Ok(NodeFilter::Predicate(comp))

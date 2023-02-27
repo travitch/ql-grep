@@ -188,7 +188,7 @@ impl TreeInterface for CPPTreeInterface {
         NodeListMatcher {
             extract: Rc::new(move |ctx| {
                 let mut callsites = Vec::new();
-                get_callable_ref(ctx).map(|callable_ref| {
+                if let Some(callable_ref) = get_callable_ref(ctx) {
                     let callable_node = ctx.lookup_callable(&callable_ref.value);
                     let mut cur = tree_sitter::QueryCursor::new();
                     let ql_query = "(call_expression function: (_) @func arguments: (argument_list) @args)";
@@ -213,7 +213,7 @@ impl TreeInterface for CPPTreeInterface {
                         let res = WithRanges::new(callsite, vec![ranges]);
                         callsites.push(res);
                     }
-                });
+                }
 
                 callsites
             }),

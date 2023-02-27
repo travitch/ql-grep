@@ -58,8 +58,8 @@ fn call_get_argument(
             };
             let comp = NodeMatcher {
                 extract: Rc::new(move |ctx| {
-                    get_arg_idx(ctx).map(|arg_idx_i| {
-                        get_callsite(ctx).map(|callsite_res| {
+                    get_arg_idx(ctx).and_then(|arg_idx_i| {
+                        get_callsite(ctx).and_then(|callsite_res| {
                             let arg_list = callsite_res.value.arguments;
                             assert!(arg_idx_i.value >= 0);
                             let arg_idx = arg_idx_i.value as usize;
@@ -68,8 +68,8 @@ fn call_get_argument(
                             } else {
                                 None
                             }
-                        }).flatten()
-                    }).flatten()
+                        })
+                    })
                 }),
             };
             Ok(NodeFilter::ExprComputation(comp))
