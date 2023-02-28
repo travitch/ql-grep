@@ -39,4 +39,6 @@ pub struct Cli {
     pub print_manpage: bool,
     #[arg(long, help = "Print shell completions and exit")]
     pub print_shell_completions: Option<clap_complete::Shell>,
+    #[arg(long, help = "Print matches in JSONL format")]
+    pub jsonl: bool,
 }

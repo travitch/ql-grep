@@ -18,25 +18,31 @@ use ql_grep::{
 };
 
 mod cli;
+mod jsonl;
 mod result_printer;
 
 /// Create a query result printer by parsing out the chosen command line arguments
 fn make_result_printer(
     args: cli::Cli,
     is_term_connected: bool,
-) -> Box<dyn result_printer::QueryResultPrinter> {
-    let base_printer: Box<dyn result_printer::QueryResultPrinter> =
-        if args.disable_ansi || !is_term_connected {
-            Box::new(result_printer::PlainWriter::new())
-        } else {
-            Box::new(result_printer::ANSIWriter::new())
-        };
+) -> Box<dyn result_printer::OutputFormat> {
+    if args.jsonl {
+        Box::new(result_printer::JSONLFormat::new())
+    } else {
+        let base_printer: Box<dyn result_printer::QueryResultPrinter> =
+            if args.disable_ansi || !is_term_connected {
+                Box::new(result_printer::PlainWriter::new())
+            } else {
+                Box::new(result_printer::ANSIWriter::new())
+            };
 
-    if args.number_lines {
-        return Box::new(result_printer::LineNumberWriter::new(base_printer));
+        if args.number_lines {
+            let p = Box::new(result_printer::LineNumberWriter::new(base_printer));
+            return Box::new(result_printer::TextFormat::new(p));
+        }
+
+        Box::new(result_printer::TextFormat::new(base_printer))
     }
-
-    base_printer
 }
 
 /// Parse a query provided as either a literal string or a path to a file on
@@ -168,8 +174,7 @@ fn spawn_accumulator_thread(
                     stats.num_files_parsed += 1;
                     stats.num_matches += qr.results.len();
                     for res in qr.results {
-                        result_printer::print_query_result(
-                            &*result_writer,
+                        result_writer.print_query_result(
                             &qr.source_file,
                             &res,
                             &mut output_dest,
@@ -267,6 +272,7 @@ fn main() -> anyhow::Result<()> {
 
     let (send, recv) = bounded::<QueryResults>(4096);
 
+    let json_output = args.jsonl;
     // Spawn a thread to collect all of the intermediate results produced by
     // worker threads over the channel.
     let accumulator_handle = spawn_accumulator_thread(args, recv);
@@ -291,9 +297,11 @@ fn main() -> anyhow::Result<()> {
             std::panic::resume_unwind(err);
         }
         Ok(result) => {
-            println!("Summary:");
-            println!("  {} files parsed", result.num_files_parsed);
-            println!("  {} objects matched", result.num_matches);
+            if !json_output {
+                println!("Summary:");
+                println!("  {} files parsed", result.num_files_parsed);
+                println!("  {} objects matched", result.num_matches);
+            }
         }
     }
 
