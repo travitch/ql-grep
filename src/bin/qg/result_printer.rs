@@ -10,6 +10,8 @@ use ql_grep::{QueryResult, SourceFile};
 use std::io::Write;
 use tracing::warn;
 
+use crate::jsonl;
+
 pub struct HighlightInfo<'a> {
     /// This is the offset of the current slice being printed from the start of
     /// the file.  The intent is that this is sufficient information to
@@ -206,45 +208,75 @@ impl QueryResultPrinter for LineNumberWriter {
     }
 }
 
-pub fn print_query_result(
-    printer: &dyn QueryResultPrinter,
-    source_file: &SourceFile,
-    qr: &QueryResult,
-    w: &mut Box<dyn Write>,
-) -> anyhow::Result<()> {
-    match qr {
-        QueryResult::Constant(v) => {
-            writeln!(w, "{}", source_file.file_path.display())?;
-            writeln!(w, "  {v}")?;
-        }
-        QueryResult::Node(rng, highlights) => {
-            writeln!(
-                w,
-                "{}:{}-{}",
-                source_file.file_path.display(),
-                rng.start_point.row,
-                rng.end_point.row
-            )?;
-            let all_bytes = source_file.source.as_bytes();
-            let slice = &all_bytes[rng.start_byte..rng.end_byte];
+pub trait OutputFormat {
+    fn print_query_result(&self, source_file: &SourceFile, qr: &QueryResult, w: &mut Box<dyn Write>) -> anyhow::Result<()>;
+}
 
-            let highlight_intervals = highlights
-                .iter()
-                .map(|h| (h.start_byte, h.end_byte))
-                .collect::<Vec<_>>()
-                .to_interval_set();
+pub struct TextFormat {
+    printer: Box<dyn QueryResultPrinter>,
+}
 
-            let info = HighlightInfo {
-                byte_offset: rng.start_byte,
-                entity_range: *rng,
-                highlights: &highlight_intervals,
-            };
-            printer.write_result(slice, &info, w)?;
+impl TextFormat {
+    pub fn new(p: Box<dyn QueryResultPrinter>) -> Self {
+        TextFormat {
+            printer: p,
         }
     }
+}
 
-    writeln!(w)?;
-    Ok(())
+impl OutputFormat for TextFormat {
+    fn print_query_result(&self, source_file: &SourceFile, qr: &QueryResult, w: &mut Box<dyn Write>) -> anyhow::Result<()> {
+        match qr {
+            QueryResult::Constant(v) => {
+                writeln!(w, "{}", source_file.file_path.display())?;
+                writeln!(w, "  {v}")?;
+            }
+            QueryResult::Node(rng, highlights) => {
+                writeln!(
+                    w,
+                    "{}:{}-{}",
+                    source_file.file_path.display(),
+                    rng.start_point.row,
+                    rng.end_point.row
+                )?;
+                let all_bytes = source_file.source.as_bytes();
+                let slice = &all_bytes[rng.start_byte..rng.end_byte];
+
+                let highlight_intervals = highlights
+                    .iter()
+                    .map(|h| (h.start_byte, h.end_byte))
+                    .collect::<Vec<_>>()
+                    .to_interval_set();
+
+                let info = HighlightInfo {
+                    byte_offset: rng.start_byte,
+                    entity_range: *rng,
+                    highlights: &highlight_intervals,
+                };
+                self.printer.write_result(slice, &info, w)?;
+            }
+        }
+
+        writeln!(w)?;
+        Ok(())
+    }
+}
+
+pub struct JSONLFormat { }
+
+impl JSONLFormat {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl OutputFormat for JSONLFormat {
+    fn print_query_result(&self, source_file: &SourceFile, qr: &QueryResult, w: &mut Box<dyn Write>) -> anyhow::Result<()> {
+        let ov = jsonl::OutputValue::new(source_file, qr);
+        let json_str = ov.to_string()?;
+        writeln!(w, "{}", json_str)?;
+        Ok(())
+    }
 }
 
 #[test]

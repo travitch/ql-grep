@@ -22,6 +22,8 @@ num_cpus = "^1"
 once_cell = "^1.16"
 pretty = "^0.11"
 regex = "^1"
+serde = { version = "^1", features = ["derive"] }
+serde_json = "^1"
 tracing = "^0.1"
 tracing-subscriber = { version = "^0.3", features = ["env-filter"]}
 thiserror = "^1"
@@ -37,7 +39,6 @@ tree-sitter-java = "^0.20"
 cc="^1.0"
 
 [dev-dependencies]
-serde = { version = "^1", features = ["derive"] }
 test-generator = "^0.3"
 # Used to specify the expected formats of tests (see [ref:toml-test-cases])
 toml = "^0.5"
