@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::compile::errors::PlanError;
-use crate::compile::interface::{CallableRef, CallsiteRef, ImportRef, NodeMatcher, ParameterRef, TreeInterface};
+use crate::compile::interface::{CallableRef, CallsiteRef, EvaluationContext, ImportRef, NodeListMatcher, NodeMatcher, ParameterRef, TreeInterface};
 use crate::compile::method_library::{method_impl_for, Handler};
 use crate::compile::node_filter::NodeFilter;
 use crate::plan::QueryPlan;
@@ -297,6 +297,49 @@ fn compile_equality_comparison(
     }
 }
 
+fn generic_compile_bind<F, V>(
+    val_gen: &NodeListMatcher<V>,
+    eval_func: &NodeMatcher<bool>,
+    do_bind_val: F,
+) -> NodeFilter
+where
+  F: Fn(&mut EvaluationContext, WithRanges<V>) + 'static,
+  V: Clone + 'static,
+{
+    let this_val_gen = Rc::clone(&val_gen.extract);
+    let this_eval_func = Rc::clone(&eval_func.extract);
+    let m = NodeMatcher {
+        extract: Rc::new(move |ctx| {
+            let inner_val_gen = Rc::clone(&this_val_gen);
+            let mut collected_ranges = Vec::new();
+            let vals = inner_val_gen(ctx);
+            for val in vals {
+                do_bind_val(ctx, val.clone());
+                if let Some(mut this_result) = this_eval_func(ctx) {
+                    // NOTE: This short circuits evaluation once any match is
+                    // found. That is only desirable if the enclosing construct
+                    // (e.g., a function) is the thing being selected.
+                    if this_result.value {
+                        return Some(this_result);
+                    }
+
+
+                    // These ranges are only used if *all* of the
+                    // arguments fail to satisfy the predicate
+                    collected_ranges.append(&mut this_result.ranges);
+                }
+            }
+
+            Some(WithRanges {
+                value: false,
+                ranges: collected_ranges,
+            })
+        }),
+    };
+
+    NodeFilter::Predicate(m)
+}
+
 fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<NodeFilter> {
     match &e.expr {
         Expr_::ConstantExpr(v) => Ok(compile_constant(v)),
@@ -330,93 +373,27 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             match compiled_binder {
                 NodeFilter::ArgumentListComputation(param_comp) => {
                     let param_ref = ParameterRef::new(bound_var.name.clone());
-                    let m = NodeMatcher {
-                        extract: Rc::new(move |ctx| {
-                            let param_ref_inner = param_ref.clone();
-                            let mut collected_ranges = Vec::new();
-                            let params = (param_comp.extract)(ctx);
-                            for param in params {
-                                ctx.bind_parameter(&param_ref_inner, &param);
-                                // NOTE: This short circuits evaluation once any
-                                // match is found. That is only desirable if the
-                                // enclosing construct (e.g., a function) is the
-                                // thing being selected.
-                                if let Some(mut this_result) = (eval_func.extract)(ctx) {
-                                    if this_result.value {
-                                        return Some(this_result);
-                                    }
-
-                                    // These ranges are only used if *all* of the
-                                    // arguments fail to satisfy the predicate
-                                    collected_ranges.append(&mut this_result.ranges);
-                                }
-                            }
-
-                            Some(WithRanges {
-                                value: false,
-                                ranges: collected_ranges,
-                            })
-                        }),
-                    };
-
-                    Ok(NodeFilter::Predicate(m))
+                    let m = generic_compile_bind(&param_comp, &eval_func, move |ctx, param| {
+                        let param_ref_inner = param_ref.clone();
+                        ctx.bind_parameter(&param_ref_inner, &param);
+                    });
+                    Ok(m)
                 }
                 NodeFilter::ImportListComputation(import_comp) => {
                     let import_ref = ImportRef::new(bound_var.name.clone());
-                    let m = NodeMatcher {
-                        extract: Rc::new(move |ctx| {
-                            let import_ref_inner = import_ref.clone();
-                            let mut collected_ranges = Vec::new();
-                            let imports = (import_comp.extract)(ctx);
-                            for import in imports {
-                                ctx.bind_import(&import_ref_inner, import.clone());
-                                // NOTE: This short circuits evaluation once any
-                                // match is found. That is only desirable if the
-                                // enclosing construct (e.g., a function) is the
-                                // thing being selected.
-                                if let Some(mut this_result) = (eval_func.extract)(ctx) {
-                                    if this_result.value {
-                                        return Some(this_result);
-                                    }
-
-                                    // These ranges are only used if *all* of the
-                                    // arguments fail to satisfy the predicate
-                                    collected_ranges.append(&mut this_result.ranges);
-                                }
-                            }
-
-                            Some(WithRanges {
-                                value: false,
-                                ranges: collected_ranges,
-                            })
-                        }),
-                    };
-                    Ok(NodeFilter::Predicate(m))
+                    let m = generic_compile_bind(&import_comp, &eval_func, move |ctx, imp| {
+                        let import_ref_inner = import_ref.clone();
+                        ctx.bind_import(&import_ref_inner, imp);
+                    });
+                    Ok(m)
                 }
                 NodeFilter::CallsiteListComputation(callsite_comp) => {
                     let callsite_ref = CallsiteRef::new(bound_var.name.clone());
-                    let m = NodeMatcher {
-                        extract: Rc::new(move |ctx| {
-                            let this_ref = callsite_ref.clone();
-                            let mut collected_ranges = Vec::new();
-                            let callsites = (callsite_comp.extract)(ctx);
-                            for callsite in callsites {
-                                ctx.bind_callsite(&this_ref, &callsite);
-                                if let Some(mut this_result) = (eval_func.extract)(ctx) {
-                                    if this_result.value {
-                                        return Some(this_result);
-                                    }
-                                    collected_ranges.append(&mut this_result.ranges);
-                                }
-                            }
-
-                            Some(WithRanges {
-                                value: false,
-                                ranges: collected_ranges,
-                            })
-                        }),
-                    };
-                    Ok(NodeFilter::Predicate(m))
+                    let m = generic_compile_bind(&callsite_comp, &eval_func, move |ctx, callsite| {
+                        let callsite_ref_inner = callsite_ref.clone();
+                        ctx.bind_callsite(&callsite_ref_inner, &callsite);
+                    });
+                    Ok(m)
                 }
                 _ => {
                     panic!("Unexpected binder type: {}", compiled_binder.kind());
