@@ -340,6 +340,39 @@ where
     NodeFilter::Predicate(m)
 }
 
+fn compile_bind_expr(
+    bound_var: &VarDecl,
+    compiled_binder: NodeFilter,
+    eval_func: NodeMatcher<bool>,
+) -> NodeFilter {
+    match compiled_binder {
+        NodeFilter::ArgumentListComputation(param_comp) => {
+            let param_ref = ParameterRef::new(bound_var.name.clone());
+            generic_compile_bind(&param_comp, &eval_func, move |ctx, param| {
+                let param_ref_inner = param_ref.clone();
+                ctx.bind_parameter(&param_ref_inner, &param);
+            })
+        }
+        NodeFilter::ImportListComputation(import_comp) => {
+            let import_ref = ImportRef::new(bound_var.name.clone());
+            generic_compile_bind(&import_comp, &eval_func, move |ctx, imp| {
+                let import_ref_inner = import_ref.clone();
+                ctx.bind_import(&import_ref_inner, imp);
+            })
+        }
+        NodeFilter::CallsiteListComputation(callsite_comp) => {
+            let callsite_ref = CallsiteRef::new(bound_var.name.clone());
+            generic_compile_bind(&callsite_comp, &eval_func, move |ctx, callsite| {
+                let callsite_ref_inner = callsite_ref.clone();
+                ctx.bind_callsite(&callsite_ref_inner, &callsite);
+            })
+        }
+        _ => {
+            panic!("Unexpected binder type: {}", compiled_binder.kind());
+        }
+    }
+}
+
 fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<NodeFilter> {
     match &e.expr {
         Expr_::ConstantExpr(v) => Ok(compile_constant(v)),
@@ -370,35 +403,7 @@ fn compile_expr(ti: Rc<dyn TreeInterface>, e: &Expr<Typed>) -> anyhow::Result<No
             };
 
             let compiled_binder = compile_expr(Rc::clone(&ti), relation_expr)?;
-            match compiled_binder {
-                NodeFilter::ArgumentListComputation(param_comp) => {
-                    let param_ref = ParameterRef::new(bound_var.name.clone());
-                    let m = generic_compile_bind(&param_comp, &eval_func, move |ctx, param| {
-                        let param_ref_inner = param_ref.clone();
-                        ctx.bind_parameter(&param_ref_inner, &param);
-                    });
-                    Ok(m)
-                }
-                NodeFilter::ImportListComputation(import_comp) => {
-                    let import_ref = ImportRef::new(bound_var.name.clone());
-                    let m = generic_compile_bind(&import_comp, &eval_func, move |ctx, imp| {
-                        let import_ref_inner = import_ref.clone();
-                        ctx.bind_import(&import_ref_inner, imp);
-                    });
-                    Ok(m)
-                }
-                NodeFilter::CallsiteListComputation(callsite_comp) => {
-                    let callsite_ref = CallsiteRef::new(bound_var.name.clone());
-                    let m = generic_compile_bind(&callsite_comp, &eval_func, move |ctx, callsite| {
-                        let callsite_ref_inner = callsite_ref.clone();
-                        ctx.bind_callsite(&callsite_ref_inner, &callsite);
-                    });
-                    Ok(m)
-                }
-                _ => {
-                    panic!("Unexpected binder type: {}", compiled_binder.kind());
-                }
-            }
+            Ok(compile_bind_expr(bound_var, compiled_binder, eval_func))
         }
         Expr_::EqualityComparison { lhs, op, rhs } => {
             let lhs_f = compile_expr(Rc::clone(&ti), lhs)?;
